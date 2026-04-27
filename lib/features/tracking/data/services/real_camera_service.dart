@@ -3,17 +3,10 @@ import 'package:camera/camera.dart';
 import '../../../../core/error/failures.dart';
 import '../../domain/services/camera_service.dart';
 import '../../domain/services/logger.dart';
-import '../../domain/services/permission_service.dart';
 
 /// Real camera service implementation using camera plugin
-/// Handles permissions, camera initialization, and proper lifecycle management
-/// 
-/// ARCHITECTURE: Persistent session pattern
-/// - init() → start camera session (once per app lifecycle)
-/// - takePicture() → capture within active session
-/// - dispose() → cleanup session
+/// Supports persistent camera session with preview for manual capture
 class RealCameraService implements CameraService {
-  final PermissionService permissionService;
   final Logger logger;
 
   CameraController? _controller;
@@ -21,94 +14,89 @@ class RealCameraService implements CameraService {
   bool _isInitialized = false;
 
   RealCameraService({
-    required this.permissionService,
     required this.logger,
   });
 
+  /// Initialize camera for preview session (persistent)
+  /// Must be called before accessing preview or taking pictures
   @override
   Future<void> init() async {
     if (_isInitialized) {
-      logger.log('[CameraService] Camera already initialized, skipping');
+      logger.log('[CameraService] Camera already initialized');
       return;
     }
 
     try {
-      // Step 1: Check/request permission
-      logger.log('[CameraService] Requesting camera permission...');
-      final permissionStatus = await permissionService.requestCameraPermission();
-      
-      if (permissionStatus == PermissionStatus.deniedForever) {
-        logger.error('[CameraService] Camera permission permanently denied');
-        throw CameraFailure(
-          'Camera permission permanently denied. Please enable in app settings.',
-        );
-      }
-      
-      if (permissionStatus != PermissionStatus.granted) {
-        logger.error('[CameraService] Camera permission denied');
-        throw CameraFailure('Camera permission denied. Please grant camera access.');
-      }
+      logger.log('[CameraService] Initializing camera session...');
 
-      // Step 2: Get available cameras
+      // Get available cameras
       _cameras ??= await availableCameras();
       if (_cameras!.isEmpty) {
         logger.error('[CameraService] No cameras available');
         throw CameraFailure('No camera available on this device');
       }
 
-      // Step 3: Select back camera
+      // Select back camera
       final backCamera = _cameras!.firstWhere(
         (camera) => camera.lensDirection == CameraLensDirection.back,
         orElse: () => _cameras!.first,
       );
 
-      // Step 4: Create and initialize controller (persistent)
+      // Create and initialize controller (persistent for preview)
       _controller = CameraController(
         backCamera,
         ResolutionPreset.medium,
         enableAudio: false,
       );
 
-      logger.log('[CameraService] Initializing camera controller...');
       await _controller!.initialize();
       _isInitialized = true;
-      logger.log('[CameraService] Camera session initialized successfully');
+      logger.log('[CameraService] Camera initialized successfully');
 
     } on CameraException catch (e) {
-      logger.error('[CameraService] Camera exception during init: ${e.code} - ${e.description}', e);
+      logger.error('[CameraService] Camera exception during init: ${e.code}', e);
       throw _mapCameraException(e);
     } catch (e) {
       logger.error('[CameraService] Unexpected error during init', e);
-      throw CameraFailure('Camera initialization failed: $e');
+      throw CameraFailure('Failed to initialize camera: $e');
     }
   }
 
+  /// Get camera controller for UI preview
   @override
-  CameraController? getController() => _controller;
+  CameraController? getController() {
+    if (!_isInitialized) {
+      logger.warning('[CameraService] getController called but camera not initialized');
+      return null;
+    }
+    return _controller;
+  }
 
+  /// Check if camera is initialized
   @override
-  bool isInitialized() => _isInitialized && _controller != null && _controller!.value.isInitialized;
+  bool isInitialized() => _isInitialized;
 
+  /// Take picture within active session (must call init() first)
   @override
   Future<String> takePicture() async {
     try {
-      if (!isInitialized()) {
-        logger.error('[CameraService] Camera not initialized');
+      if (!_isInitialized || _controller == null) {
+        logger.error('[CameraService] Camera not initialized for capture');
         throw CameraFailure('Camera not initialized. Call init() first.');
       }
 
       logger.log('[CameraService] Taking picture...');
       final image = await _controller!.takePicture();
-      logger.log('[CameraService] Picture taken: ${image.path}');
+      logger.log('[CameraService] Picture captured: ${image.path}');
 
       return image.path;
 
     } on CameraException catch (e) {
-      logger.error('[CameraService] Camera exception during capture: ${e.code} - ${e.description}', e);
+      logger.error('[CameraService] Camera exception during capture: ${e.code}', e);
       throw _mapCameraException(e);
     } catch (e) {
       logger.error('[CameraService] Unexpected error during capture', e);
-      throw CameraFailure('Picture capture failed: $e');
+      throw CameraFailure('Failed to capture image: $e');
     }
   }
 
@@ -143,16 +131,10 @@ class RealCameraService implements CameraService {
   /// Dispose resources
   @override
   Future<void> dispose() async {
-    try {
-      if (_controller != null) {
-        logger.log('[CameraService] Disposing camera controller');
-        await _controller!.dispose();
-        _controller = null;
-      }
+    if (_controller != null) {
+      await _controller!.dispose();
+      _controller = null;
       _isInitialized = false;
-      logger.log('[CameraService] Camera session disposed');
-    } catch (e) {
-      logger.error('[CameraService] Error during dispose', e);
     }
   }
 }
