@@ -1,4 +1,3 @@
-import 'package:camera/camera.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/error/failures.dart';
@@ -23,10 +22,7 @@ import '../data/services/real_permission_service.dart';
 import '../data/services/real_time_provider.dart';
 import '../data/services/timestamp_id_generator.dart';
 
-// ============================================================================
-// CORE SERVICES
-// ============================================================================
-
+// Core services
 final loggerProvider = Provider<Logger>((ref) => const RealLogger());
 
 final timeProvider = Provider<TimeProvider>((ref) => RealTimeProvider());
@@ -35,106 +31,15 @@ final permissionServiceProvider = Provider<PermissionService>(
   (ref) => RealPermissionService(),
 );
 
-// ============================================================================
-// CAMERA SERVICE WITH PERSISTENT LIFECYCLE
-// ============================================================================
+// Domain services
+final idGeneratorProvider = Provider<IdGenerator>(
+  (ref) => TimestampIdGenerator(ref.watch(timeProvider)),
+);
 
 final cameraServiceProvider = Provider<CameraService>(
   (ref) => RealCameraService(
-    permissionService: ref.watch(permissionServiceProvider),
     logger: ref.watch(loggerProvider),
   ),
-);
-
-/// Camera controller state notifier - manages camera lifecycle
-class CameraControllerState {
-  final CameraController? controller;
-  final bool isInitializing;
-  final Failure? error;
-
-  const CameraControllerState({
-    this.controller,
-    this.isInitializing = false,
-    this.error,
-  });
-
-  bool get isInitialized => controller != null && controller!.value.isInitialized;
-
-  CameraControllerState copyWith({
-    CameraController? controller,
-    bool? isInitializing,
-    Failure? error,
-  }) {
-    return CameraControllerState(
-      controller: controller ?? this.controller,
-      isInitializing: isInitializing ?? this.isInitializing,
-      error: error ?? this.error,
-    );
-  }
-}
-
-class CameraControllerNotifier extends StateNotifier<CameraControllerState> {
-  final CameraService _cameraService;
-  final Logger _logger;
-
-  CameraControllerNotifier(this._cameraService, this._logger)
-      : super(const CameraControllerState());
-
-  /// Initialize camera session (call once at app start)
-  Future<void> initializeCamera() async {
-    if (state.isInitialized) {
-      _logger.log('[CameraNotifier] Camera already initialized, skipping');
-      return;
-    }
-
-    state = state.copyWith(isInitializing: true, error: null);
-
-    try {
-      await _cameraService.init();
-      final controller = _cameraService.getController();
-
-      state = state.copyWith(
-        controller: controller,
-        isInitializing: false,
-        error: null,
-      );
-
-      _logger.log('[CameraNotifier] Camera initialized successfully');
-    } catch (e) {
-      _logger.error('[CameraNotifier] Failed to initialize camera', e);
-      state = state.copyWith(
-        isInitializing: false,
-        error: e is Failure ? e : GenericFailure('Camera initialization failed: $e'),
-      );
-    }
-  }
-
-  /// Dispose camera session
-  Future<void> disposeCamera() async {
-    try {
-      await _cameraService.dispose();
-      state = const CameraControllerState();
-      _logger.log('[CameraNotifier] Camera disposed');
-    } catch (e) {
-      _logger.error('[CameraNotifier] Error disposing camera', e);
-    }
-  }
-}
-
-final cameraControllerProvider =
-    StateNotifierProvider<CameraControllerNotifier, CameraControllerState>((ref) {
-  return CameraControllerNotifier(
-    ref.watch(cameraServiceProvider),
-    ref.watch(loggerProvider),
-  );
-});
-
-// ============================================================================
-// DOMAIN SERVICES
-// ============================================================================
-
-final idGeneratorProvider = Provider<IdGenerator>(
-  (ref) => TimestampIdGenerator(ref.watch(timeProvider)),
 );
 
 final locationServiceProvider = Provider<LocationService>(
@@ -145,24 +50,19 @@ final geocodingServiceProvider = Provider<GeocodingService>(
   (ref) => RealGeocodingService(ref.watch(loggerProvider)),
 );
 
-// ============================================================================
-// DATA SOURCES & REPOSITORIES
-// ============================================================================
-
+// Data sources
 final trackingLocalDataSourceProvider = Provider<TrackingLocalDataSource>(
   (ref) => TrackingLocalDataSourceImpl(),
 );
 
+// Repository
 final trackingRepositoryProvider = Provider<TrackingRepository>(
   (ref) => TrackingRepositoryImpl(
     localDataSource: ref.watch(trackingLocalDataSourceProvider),
   ),
 );
 
-// ============================================================================
-// USE CASES
-// ============================================================================
-
+// UseCase
 final captureTrackingProvider = Provider<CaptureTracking>(
   (ref) => CaptureTracking(
     repository: ref.watch(trackingRepositoryProvider),
@@ -171,32 +71,32 @@ final captureTrackingProvider = Provider<CaptureTracking>(
     geocodingService: ref.watch(geocodingServiceProvider),
     idGenerator: ref.watch(idGeneratorProvider),
     timeProvider: ref.watch(timeProvider),
-    permissionService: ref.watch(permissionServiceProvider),
     logger: ref.watch(loggerProvider),
   ),
 );
 
-// ============================================================================
-// STATE MANAGEMENT - CAPTURE FLOW
-// ============================================================================
-
+// State management - Enhanced with camera phase tracking
 class CaptureState {
+  final CapturePhase phase;  // NEW: track current phase
   final bool isLoading;
   final Tracking? tracking;
   final Failure? error;
 
   const CaptureState({
+    this.phase = CapturePhase.ready,
     this.isLoading = false,
     this.tracking,
     this.error,
   });
 
   CaptureState copyWith({
+    CapturePhase? phase,
     bool? isLoading,
     Tracking? tracking,
     Failure? error,
   }) {
     return CaptureState(
+      phase: phase ?? this.phase,
       isLoading: isLoading ?? this.isLoading,
       tracking: tracking ?? this.tracking,
       error: error ?? this.error,
@@ -204,48 +104,112 @@ class CaptureState {
   }
 }
 
+/// Phases of the capture flow
+enum CapturePhase {
+  ready,           // Ready to start capture
+  initializingCamera,  // Camera initializing
+  previewReady,    // Camera preview visible - user sees live feed
+  capturingPhoto,  // Taking photo
+  processingData,  // GPS + Geocoding
+  complete,        // Capture successful
+}
+
 class CaptureNotifier extends StateNotifier<CaptureState> {
   final CaptureTracking _captureTracking;
   final Logger _logger;
   final PermissionService _permissionService;
+  final CameraService _cameraService;
 
   CaptureNotifier(
     this._captureTracking,
     this._logger,
     this._permissionService,
+    this._cameraService,
   ) : super(const CaptureState());
 
-  Future<void> capture() async {
-    if (state.isLoading) {
-      _logger.warning('Capture already in progress, ignoring duplicate request');
+  /// Phase 1: Initialize camera and request permissions (shows preview)
+  Future<void> initializeCamera() async {
+    if (state.phase != CapturePhase.ready) {
+      _logger.warning('[CaptureNotifier] Camera already initializing or initialized');
       return;
     }
 
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(phase: CapturePhase.initializingCamera, isLoading: true, error: null);
 
     try {
+      // Check/request permissions
+      _logger.log('[CaptureNotifier] Requesting camera permission...');
+      final cameraPermission = await _permissionService.requestCameraPermission();
+      if (cameraPermission != PermissionStatus.granted) {
+        final errorMsg = cameraPermission == PermissionStatus.deniedForever
+            ? 'Camera permission permanently denied. Please enable in app settings.'
+            : 'Camera permission denied. Please grant camera access.';
+        throw CameraFailure(errorMsg);
+      }
+
+      _logger.log('[CaptureNotifier] Requesting location permission...');
+      final locationPermission = await _permissionService.requestLocationPermission();
+      if (locationPermission != PermissionStatus.granted) {
+        final errorMsg = locationPermission == PermissionStatus.deniedForever
+            ? 'Location permission permanently denied. Please enable in app settings.'
+            : 'Location permission denied. Please grant location access.';
+        throw LocationFailure(errorMsg);
+      }
+
+      // Initialize camera (shows preview)
+      _logger.log('[CaptureNotifier] Initializing camera service...');
+      await _cameraService.init();
+
+      state = state.copyWith(phase: CapturePhase.previewReady, isLoading: false);
+      _logger.log('[CaptureNotifier] Camera ready for preview');
+
+    } catch (e) {
+      _logger.error('[CaptureNotifier] Error during camera initialization', e);
+      final failure = e is Failure ? e : GenericFailure(e.toString());
+      state = state.copyWith(
+        phase: CapturePhase.ready,
+        isLoading: false,
+        error: failure,
+      );
+    }
+  }
+
+  /// Phase 2: Capture photo + GPS + Geocoding (user manually clicks capture in preview)
+  Future<void> capturePhoto() async {
+    if (state.phase != CapturePhase.previewReady) {
+      _logger.warning('[CaptureNotifier] Cannot capture - camera not in preview phase');
+      return;
+    }
+
+    state = state.copyWith(phase: CapturePhase.capturingPhoto, isLoading: true, error: null);
+
+    try {
+      _logger.log('[CaptureNotifier] Photo + GPS + Geocoding capture started');
       final result = await _captureTracking.execute();
 
       result.when(
         success: (tracking) {
-          _logger.log('Capture successful: ${tracking.id}');
+          _logger.log('[CaptureNotifier] Capture successful: ${tracking.id}');
           state = state.copyWith(
+            phase: CapturePhase.complete,
             isLoading: false,
             tracking: tracking,
             error: null,
           );
         },
         failure: (error) {
-          _logger.error('Capture failed: ${error.message}', error);
+          _logger.error('[CaptureNotifier] Capture failed: ${error.message}', error);
           state = state.copyWith(
+            phase: CapturePhase.previewReady,  // Back to preview to retry
             isLoading: false,
             error: error,
           );
         },
       );
     } catch (e) {
-      _logger.error('Unexpected error in capture notifier', e);
+      _logger.error('[CaptureNotifier] Unexpected error during photo capture', e);
       state = state.copyWith(
+        phase: CapturePhase.previewReady,
         isLoading: false,
         error: GenericFailure('Unexpected error: $e'),
       );
@@ -266,7 +230,16 @@ class CaptureNotifier extends StateNotifier<CaptureState> {
     }
   }
 
-  void reset() {
+  /// Cleanup and reset to ready
+  Future<void> reset() async {
+    try {
+      if (state.phase != CapturePhase.ready) {
+        _logger.log('[CaptureNotifier] Disposing camera...');
+        await _cameraService.dispose();
+      }
+    } catch (e) {
+      _logger.error('[CaptureNotifier] Error disposing camera', e);
+    }
     state = const CaptureState();
   }
 }
@@ -276,5 +249,6 @@ final captureNotifierProvider = StateNotifierProvider<CaptureNotifier, CaptureSt
     ref.watch(captureTrackingProvider),
     ref.watch(loggerProvider),
     ref.watch(permissionServiceProvider),
+    ref.watch(cameraServiceProvider),
   ),
 );
