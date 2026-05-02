@@ -16,13 +16,11 @@ class RealCameraService implements CameraService {
   CameraController? _controller;
   List<CameraDescription>? _cameras;
   bool _isInitialized = false;
-  
+
   // Directory untuk menyimpan foto tracking
   static const String _photoDirName = 'tracking_photos';
 
-  RealCameraService({
-    required this.logger,
-  });
+  RealCameraService({required this.logger});
 
   /// Initialize camera for preview session (persistent)
   /// Must be called before accessing preview or taking pictures
@@ -59,9 +57,11 @@ class RealCameraService implements CameraService {
       await _controller!.initialize();
       _isInitialized = true;
       logger.log('[CameraService] Camera initialized successfully');
-
     } on CameraException catch (e) {
-      logger.error('[CameraService] Camera exception during init: ${e.code}', e);
+      logger.error(
+        '[CameraService] Camera exception during init: ${e.code}',
+        e,
+      );
       throw _mapCameraException(e);
     } catch (e) {
       logger.error('[CameraService] Unexpected error during init', e);
@@ -73,7 +73,9 @@ class RealCameraService implements CameraService {
   @override
   CameraController? getController() {
     if (!_isInitialized) {
-      logger.warning('[CameraService] getController called but camera not initialized');
+      logger.warning(
+        '[CameraService] getController called but camera not initialized',
+      );
       return null;
     }
     return _controller;
@@ -84,14 +86,14 @@ class RealCameraService implements CameraService {
   bool isInitialized() => _isInitialized;
 
   /// Take picture dan SIMPAN ke persistent storage dengan path yang valid
-  /// 
+  ///
   /// Flow:
   /// 1. takePicture() dari camera → XFile (temporary)
   /// 2. Buat target directory: /app/documents/tracking_photos/
   /// 3. Generate filename: {timestamp}.jpg
   /// 4. Copy XFile ke target path
   /// 5. Return persistent path & verify file exists
-  /// 
+  ///
   /// Returns: Persistent file path yang GUARANTEED ada di device storage
   @override
   Future<String> takePicture() async {
@@ -102,7 +104,7 @@ class RealCameraService implements CameraService {
       }
 
       logger.log('[CameraService] Taking picture...');
-      
+
       // Step 1: Capture foto (returns XFile with temp path)
       final xfile = await _controller!.takePicture();
       logger.log('[CameraService] Picture captured (temp): ${xfile.path}');
@@ -116,9 +118,12 @@ class RealCameraService implements CameraService {
       final persistentPath = '${photoDirectory.path}/$fileName';
       logger.log('[CameraService] Target persistent path: $persistentPath');
 
-      // Step 4: Copy file dari temp ke persistent location
-      await xfile.saveTo(persistentPath);
-      logger.log('[CameraService] File saved successfully: $persistentPath');
+      // Step 4: Copy file dari temp ke persistent location menggunakan File
+      final tempFile = File(xfile.path);
+      final persistentFile = File(persistentPath);
+      await tempFile.copy(persistentPath);
+
+      logger.log('[CameraService] File copied successfully: $persistentPath');
 
       // Step 5: Verify file exists
       final fileExists = await File(persistentPath).exists();
@@ -127,11 +132,15 @@ class RealCameraService implements CameraService {
         throw CameraFailure('Photo save verification failed - file not found');
       }
 
-      logger.log('[CameraService] ✅ Photo persisted and verified at: $persistentPath');
+      logger.log(
+        '[CameraService] ✅ Photo persisted and verified at: $persistentPath',
+      );
       return persistentPath;
-
     } on CameraException catch (e) {
-      logger.error('[CameraService] Camera exception during capture: ${e.code}', e);
+      logger.error(
+        '[CameraService] Camera exception during capture: ${e.code}',
+        e,
+      );
       throw _mapCameraException(e);
     } catch (e) {
       logger.error('[CameraService] Unexpected error during capture', e);
@@ -141,7 +150,7 @@ class RealCameraService implements CameraService {
 
   /// Get atau create folder untuk tracking photos
   /// Path: /app/documents/tracking_photos/
-  /// 
+  ///
   /// Jika folder belum ada, dibuat otomatis
   Future<Directory> _getOrCreatePhotoDirectory() async {
     try {
@@ -151,10 +160,12 @@ class RealCameraService implements CameraService {
 
       // Create tracking_photos subdirectory
       final photoDir = Directory('${appDocDir.path}/$_photoDirName');
-      
+
       // Check if directory exists, if not create it
       if (!await photoDir.exists()) {
-        logger.log('[CameraService] Creating photo directory: ${photoDir.path}');
+        logger.log(
+          '[CameraService] Creating photo directory: ${photoDir.path}',
+        );
         await photoDir.create(recursive: true);
         logger.log('[CameraService] Photo directory created');
       }
@@ -168,7 +179,7 @@ class RealCameraService implements CameraService {
 
   /// Generate unique filename untuk foto baru
   /// Format: {timestamp_milliseconds}.jpg
-  /// 
+  ///
   /// Contoh: 1714461234567.jpg
   String _generatePhotoFileName() {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
