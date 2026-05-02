@@ -11,6 +11,7 @@ import '../domain/services/logger.dart';
 import '../domain/services/permission_service.dart';
 import '../domain/services/time_provider.dart';
 import '../domain/usecases/capture_tracking.dart';
+import '../domain/usecases/get_tracking_by_id.dart';
 import '../data/datasources/tracking_local_datasource.dart';
 import '../data/datasources/tracking_local_datasource_impl.dart';
 import '../data/repositories/tracking_repository_impl.dart';
@@ -72,6 +73,12 @@ final captureTrackingProvider = Provider<CaptureTracking>(
     idGenerator: ref.watch(idGeneratorProvider),
     timeProvider: ref.watch(timeProvider),
     logger: ref.watch(loggerProvider),
+  ),
+);
+
+final getTrackingByIdProvider = Provider<GetTrackingById>(
+  (ref) => GetTrackingById(
+    repository: ref.watch(trackingRepositoryProvider),
   ),
 );
 

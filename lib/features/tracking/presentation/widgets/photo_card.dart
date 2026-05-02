@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../domain/entities/tracking.dart';
@@ -33,15 +35,15 @@ class PhotoCard extends StatelessWidget {
             // ================================================================
             // IMAGE AREA
             // ================================================================
-            // TODO: Uncomment ketika siap load actual image
-            // Image.file(
-            //   File(tracking.imagePath),
-            //   fit: BoxFit.cover,
-            //   errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
-            // ),
-
-            // Placeholder image (before actual image implementation)
-            _buildPlaceholder(),
+            // Load actual image dari tracking.imagePath
+            Image.file(
+              File(tracking.imagePath),
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                // Fallback ke placeholder jika file tidak found atau invalid
+                return _buildPlaceholder();
+              },
+            ),
 
             // ================================================================
             // INFORMATION OVERLAY

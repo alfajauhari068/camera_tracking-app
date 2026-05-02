@@ -53,13 +53,17 @@ class CaptureTracking {
     _logger.log('[CaptureTracking] Starting photo + GPS + geocoding capture');
 
     try {
-      // Step 1: Capture image
-      _logger.log('[CaptureTracking] Capturing image...');
+      // ===== STEP 1: Capture Photo + Save to Persistent Storage =====
+      _logger.log('[CaptureTracking] Step 1: Capturing and persisting photo...');
+      
       final imagePath = await _cameraService.takePicture();
-      _logger.log('[CaptureTracking] Image captured: $imagePath');
+      // NOTE: takePicture() now returns PERSISTENT path, verified to exist
+      
+      _logger.log('[CaptureTracking] ✅ Photo persisted at: $imagePath');
 
-      // Step 3: Get location with timeout
-      _logger.log('[CaptureTracking] Getting location...');
+      // ===== STEP 2: Get Location =====
+      _logger.log('[CaptureTracking] Step 2: Getting GPS location...');
+      
       final location = await _locationService.getLocation().timeout(
         const Duration(seconds: 10),
         onTimeout: () {
@@ -67,10 +71,12 @@ class CaptureTracking {
           throw LocationTimeoutFailure('Location request timed out after 10 seconds. Please check GPS signal.');
         },
       );
-      _logger.log('[CaptureTracking] Location obtained: ${location.latitude}, ${location.longitude}');
+      
+      _logger.log('[CaptureTracking] ✅ Location obtained: ${location.latitude}, ${location.longitude}');
 
-      // Step 4: Geocode address with STRICT MODE (no fallback)
-      _logger.log('[CaptureTracking] Geocoding address...');
+      // ===== STEP 3: Geocode Address =====
+      _logger.log('[CaptureTracking] Step 3: Geocoding address...');
+      
       final address = await _geocodingService.getAddress(
         location.latitude,
         location.longitude,
@@ -82,21 +88,33 @@ class CaptureTracking {
           throw GeocodingTimeoutFailure('Address lookup timed out after 5 seconds. STRICT mode enforced - no partial data.');
         },
       );
-      _logger.log('[CaptureTracking] Address geocoded: $address');
+      
+      _logger.log('[CaptureTracking] ✅ Address geocoded: $address');
 
-      // Step 5: Create and save tracking
+      // ===== STEP 4: Create Tracking Entity =====
+      // IMPORTANT: imagePath sekarang guaranteed valid (file exists)
+      _logger.log('[CaptureTracking] Step 4: Creating Tracking entity...');
+      
       final tracking = Tracking(
         id: _idGenerator.generate(),
-        imagePath: imagePath,
+        imagePath: imagePath,  // 🔑 VALID persistent path, not temp
         latitude: location.latitude,
         longitude: location.longitude,
         address: address,
         accuracy: location.accuracy,
         timestamp: _timeProvider.now(),
       );
+      
+      _logger.log('[CaptureTracking] Tracking entity created: '
+          'id=${tracking.id}, imagePath=${tracking.imagePath}');
 
+      // ===== STEP 5: Save to Repository =====
+      _logger.log('[CaptureTracking] Step 5: Saving to repository...');
+      
       await _repository.saveTracking(tracking);
-      _logger.log('[CaptureTracking] Tracking saved successfully');
+      
+      _logger.log('[CaptureTracking] ✅ Tracking saved to repository');
+      _logger.log('[CaptureTracking] 🎉 Capture pipeline complete!');
 
       return Result.success(tracking);
     } on PermissionDeniedForeverFailure catch (failure) {
