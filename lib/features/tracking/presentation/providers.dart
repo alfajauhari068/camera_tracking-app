@@ -11,6 +11,7 @@ import '../domain/services/logger.dart';
 import '../domain/services/permission_service.dart';
 import '../domain/services/time_provider.dart';
 import '../domain/usecases/capture_tracking.dart';
+import '../domain/usecases/export_trackings.dart';
 import '../domain/usecases/get_tracking_by_id.dart';
 import '../data/datasources/tracking_local_datasource.dart';
 import '../data/datasources/tracking_local_datasource_impl.dart';
@@ -21,6 +22,8 @@ import '../data/services/real_location_service.dart';
 import '../data/services/real_logger.dart';
 import '../data/services/real_permission_service.dart';
 import '../data/services/real_time_provider.dart';
+import '../data/services/real_export_service.dart';
+import '../domain/services/export_service.dart';
 import '../data/services/timestamp_id_generator.dart';
 
 // Core services
@@ -73,6 +76,17 @@ final captureTrackingProvider = Provider<CaptureTracking>(
     idGenerator: ref.watch(idGeneratorProvider),
     timeProvider: ref.watch(timeProvider),
     logger: ref.watch(loggerProvider),
+  ),
+);
+
+final exportServiceProvider = Provider<ExportService>(
+  (ref) => RealExportService(ref.watch(loggerProvider)),
+);
+
+final exportTrackingsProvider = Provider<ExportTrackings>(
+  (ref) => ExportTrackings(
+    repository: ref.watch(trackingRepositoryProvider),
+    exportService: ref.watch(exportServiceProvider),
   ),
 );
 

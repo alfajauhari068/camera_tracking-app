@@ -1,192 +1,219 @@
 import 'package:flutter/material.dart';
+// import '../../../routes.dart'; // Fixed - using direct Navigator.pushNamed
 
-import '../../../../routes.dart' as app_routes;
-
-/// HOME PAGE (Dashboard)
-/// 
-/// Tujuan: Menampilkan ringkasan dan navigasi cepat ke fitur utama
-/// Route: /
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Camera GPS Tracking'),
-        centerTitle: true,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ===================================================================
-            // WELCOME SECTION
-            // ===================================================================
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF1a237e), // Navy top
+              Color(0xFF121212), // Dark gray bottom
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.all(24),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Welcome to Camera Tracking',
+                      'Camera Tracking',
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize: 32,
                         fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 1.2,
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      'Track locations with photos and GPS coordinates',
+                    Text(
+                      'Track your locations with precise GPS & photos',
                       style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey,
+                        fontSize: 16,
+                        color: Colors.white70,
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    // Ringkasan stats (placeholder)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _StatCard(label: 'Photos', value: '0'),
-                        _StatCard(label: 'Locations', value: '0'),
-                        _StatCard(label: 'Last Updated', value: '--'),
-                      ],
                     ),
                   ],
                 ),
               ),
-            ),
 
-            const SizedBox(height: 24),
-
-            // ===================================================================
-            // MAIN ACTION BUTTONS (Grid 2x2)
-            // ===================================================================
-            const Text(
-              'Quick Actions',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
+              // Status Cards
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    children: [
+                      // GPS Status
+                      _StatusCard(
+                        icon: Icons.location_on,
+                        title: 'GPS',
+                        status: 'Locked',
+                        isActive: true,
+                        color: Colors.green,
+                      ),
+                      const SizedBox(height: 16),
+                      // Tracking Status
+                      _StatusCard(
+                        icon: Icons.videocam,
+                        title: 'Tracking',
+                        status: 'Ready',
+                        isActive: false,
+                        color: Color(0xFF00e676),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
 
-            const SizedBox(height: 12),
-
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              children: [
-                // Button 1: Take Photo
-                _ActionButton(
-                  icon: Icons.camera_alt,
-                  label: 'Take Photo',
-                  onPressed: () => _navigateToCamera(context),
+              // Main Action Button
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 70,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      // Navigate to camera
+                      Navigator.pushNamed(context, '/camera');
+                    },
+                    icon: const Icon(Icons.camera_alt, size: 32, color: Colors.white),
+                    label: const Text(
+                      'BUKA KAMERA TRACKING',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00e676),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 8,
+                    ),
+                  ),
                 ),
+              ),
 
-                // Button 2: Gallery
-                _ActionButton(
-                  icon: Icons.image,
-                  label: 'Gallery',
-                  onPressed: () => _navigateToGallery(context),
+              // Bottom Shortcuts
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _ShortcutButton(
+                      icon: Icons.history,
+                      label: 'History',
+                      onPressed: () => Navigator.pushNamed(context, '/gallery'),
+                    ),
+                    _ShortcutButton(
+                      icon: Icons.settings,
+                      label: 'Settings',
+                      onPressed: () => Navigator.pushNamed(context, '/settings'),
+                    ),
+                  ],
                 ),
-
-                // Button 3: Map
-                _ActionButton(
-                  icon: Icons.map,
-                  label: 'Map View',
-                  onPressed: () => _navigateToMap(context),
-                ),
-
-                // Button 4: Export
-                _ActionButton(
-                  icon: Icons.download,
-                  label: 'Export Data',
-                  onPressed: () => _navigateToExport(context),
-                ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
-
-  // =========================================================================
-  // NAVIGATION METHODS - Contoh menggunakan Navigator.pushNamed
-  // =========================================================================
-
-  /// Navigate ke Camera screen
-  void _navigateToCamera(BuildContext context) {
-    app_routes.navigateTo(context, app_routes.AppRoutes.camera);
-  }
-
-  /// Navigate ke Gallery screen
-  void _navigateToGallery(BuildContext context) {
-    app_routes.navigateTo(context, app_routes.AppRoutes.gallery);
-  }
-
-  /// Navigate ke Map screen
-  void _navigateToMap(BuildContext context) {
-    app_routes.navigateTo(context, app_routes.AppRoutes.map);
-  }
-
-  /// Navigate ke Export screen
-  void _navigateToExport(BuildContext context) {
-    app_routes.navigateTo(context, app_routes.AppRoutes.export);
-  }
 }
 
-// =============================================================================
-// HELPER WIDGETS
-// =============================================================================
+class _StatusCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String status;
+  final bool isActive;
+  final Color color;
 
-/// Stat card untuk menampilkan ringkasan data
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _StatCard({
-    required this.label,
-    required this.value,
+  const _StatusCard({
+    required this.icon,
+    required this.title,
+    required this.status,
+    required this.isActive,
+    required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 32, color: color),
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Colors.grey,
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isActive ? color.withOpacity(0.3) : Colors.grey.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        status,
+                        style: TextStyle(
+                          color: isActive ? color : Colors.grey,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-/// Action button dengan icon dan label
-class _ActionButton extends StatelessWidget {
+class _ShortcutButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onPressed;
 
-  const _ActionButton({
+  const _ShortcutButton({
     required this.icon,
     required this.label,
     required this.onPressed,
@@ -194,16 +221,31 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ElevatedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, size: 28),
-      label: Text(label),
-      style: ElevatedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+    return GestureDetector(
+      onTap: onPressed,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: Colors.white70, size: 28),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
+

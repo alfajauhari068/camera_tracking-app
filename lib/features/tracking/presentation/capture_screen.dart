@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../routes.dart' as app_routes;
 import '../../../core/error/failures.dart';
+import 'tracking_providers.dart';
 import 'providers.dart';
 
 class CaptureScreen extends ConsumerWidget {
@@ -12,10 +16,26 @@ class CaptureScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(captureNotifierProvider);
 
+    ref.listen<CaptureState>(captureNotifierProvider, (previous, next) {
+      if (next.phase == CapturePhase.complete &&
+          previous?.phase != CapturePhase.complete) {
+        ref.invalidate(trackingListProvider);
+
+        final tracking = next.tracking;
+        if (tracking != null) {
+          Future.microtask(() {
+            app_routes.navigateTo(
+              context,
+              app_routes.AppRoutes.detail,
+              arguments: tracking,
+            );
+          });
+        }
+      }
+    });
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Camera GPS Tracking'),
-      ),
+      appBar: AppBar(title: const Text('Camera GPS Tracking')),
       body: _buildBody(context, ref, state),
     );
   }
@@ -43,7 +63,11 @@ class CaptureScreen extends ConsumerWidget {
   }
 
   /// Screen 1: Initial "Ready" state - user hasn't started yet
-  Widget _buildReadyScreen(BuildContext context, WidgetRef ref, CaptureState state) {
+  Widget _buildReadyScreen(
+    BuildContext context,
+    WidgetRef ref,
+    CaptureState state,
+  ) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -62,7 +86,8 @@ class CaptureScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 32),
           ElevatedButton.icon(
-            onPressed: () => ref.read(captureNotifierProvider.notifier).initializeCamera(),
+            onPressed: () =>
+                ref.read(captureNotifierProvider.notifier).initializeCamera(),
             icon: const Icon(Icons.camera),
             label: const Text('Start Capture'),
             style: ElevatedButton.styleFrom(
@@ -87,10 +112,13 @@ class CaptureScreen extends ConsumerWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.red.shade900),
                   ),
-                  if (state.error!.type == FailureType.permissionDeniedForever) ...[
+                  if (state.error!.type ==
+                      FailureType.permissionDeniedForever) ...[
                     const SizedBox(height: 12),
                     ElevatedButton.icon(
-                      onPressed: () => ref.read(captureNotifierProvider.notifier).openAppSettings(),
+                      onPressed: () => ref
+                          .read(captureNotifierProvider.notifier)
+                          .openAppSettings(),
                       icon: const Icon(Icons.settings),
                       label: const Text('Open App Settings'),
                       style: ElevatedButton.styleFrom(
@@ -109,7 +137,11 @@ class CaptureScreen extends ConsumerWidget {
   }
 
   /// Screen 2: Camera Preview - user sees live feed and can capture
-  Widget _buildPreviewScreen(BuildContext context, WidgetRef ref, CaptureState state) {
+  Widget _buildPreviewScreen(
+    BuildContext context,
+    WidgetRef ref,
+    CaptureState state,
+  ) {
     final controller = ref.watch(cameraServiceProvider).getController();
 
     if (controller == null || !controller.value.isInitialized) {
@@ -150,14 +182,20 @@ class CaptureScreen extends ConsumerWidget {
           right: 0,
           child: Center(
             child: ElevatedButton.icon(
-              onPressed: () => ref.read(captureNotifierProvider.notifier).capturePhoto(),
+              onPressed: () =>
+                  ref.read(captureNotifierProvider.notifier).capturePhoto(),
               icon: const Icon(Icons.camera),
               label: const Text('Capture Photo'),
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 16,
+                ),
                 backgroundColor: Colors.red,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ),
@@ -193,7 +231,9 @@ class CaptureScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 12),
                   ElevatedButton(
-                    onPressed: () => ref.read(captureNotifierProvider.notifier).capturePhoto(),
+                    onPressed: () => ref
+                        .read(captureNotifierProvider.notifier)
+                        .capturePhoto(),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.amber,
                       foregroundColor: Colors.black,
@@ -223,7 +263,11 @@ class CaptureScreen extends ConsumerWidget {
   }
 
   /// Screen 4: Capture complete - show results
-  Widget _buildCompleteScreen(BuildContext context, WidgetRef ref, CaptureState state) {
+  Widget _buildCompleteScreen(
+    BuildContext context,
+    WidgetRef ref,
+    CaptureState state,
+  ) {
     final tracking = state.tracking;
     if (tracking == null) return _buildReadyScreen(context, ref, state);
 
@@ -238,6 +282,30 @@ class CaptureScreen extends ConsumerWidget {
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 220,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.file(
+                File(tracking.imagePath),
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    color: Colors.grey.shade300,
+                    child: const Center(
+                      child: Icon(
+                        Icons.broken_image,
+                        size: 64,
+                        color: Colors.red,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -254,7 +322,10 @@ class CaptureScreen extends ConsumerWidget {
                   'Location',
                   '${tracking.latitude.toStringAsFixed(6)}, ${tracking.longitude.toStringAsFixed(6)}',
                 ),
-                _buildResultRow('Accuracy', '${tracking.accuracy.toStringAsFixed(2)} m'),
+                _buildResultRow(
+                  'Accuracy',
+                  '${tracking.accuracy.toStringAsFixed(2)} m',
+                ),
                 _buildResultRow(
                   'Time',
                   tracking.timestamp.toLocal().toString().split('.')[0],
@@ -284,10 +355,7 @@ class CaptureScreen extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
-          ),
+          Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
           const SizedBox(height: 4),
           Text(
             value,

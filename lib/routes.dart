@@ -6,15 +6,23 @@ import 'features/tracking/presentation/pages/photo_detail_page.dart';
 import 'features/tracking/presentation/pages/map_page.dart';
 import 'features/tracking/presentation/pages/export_page.dart';
 import 'features/tracking/presentation/pages/home_page.dart';
+import 'features/tracking/presentation/pages/camera_tracking_page.dart';
+import 'features/tracking/presentation/pages/history_page.dart';
+import 'features/tracking/presentation/pages/tracking_detail_page.dart';
+import 'features/tracking/presentation/pages/settings_page.dart';
 
-/// Route path constants - semua route terpusat di sini
+/// Route path constants
 class AppRoutes {
   static const String home = '/';
   static const String camera = '/camera';
+  static const String cameraTracking = '/camera-tracking';  // Demo layout
   static const String gallery = '/gallery';
+  static const String history = '/history';  // History/Log page
   static const String detail = '/detail';
+  static const String trackingDetail = '/tracking-detail';  // Tracking detail page
   static const String map = '/map';
   static const String export = '/export';
+  static const String settings = '/settings';
 }
 
 /// Route generator - maps route paths ke widget pages
@@ -26,14 +34,24 @@ Map<String, WidgetBuilder> getAppRoutes() {
     AppRoutes.home: (context) => const HomePage(),
 
     // =========================================================================
-    // CAMERA PAGE (Take Photo)
+    // CAMERA PAGE (Take Photo - Original)
     // =========================================================================
     AppRoutes.camera: (context) => const CaptureScreen(),
+
+    // =========================================================================
+    // CAMERA TRACKING PAGE (Demo layout only)
+    // =========================================================================
+    AppRoutes.cameraTracking: (context) => const CameraTrackingPage(),
 
     // =========================================================================
     // GALLERY PAGE (List of Photos)
     // =========================================================================
     AppRoutes.gallery: (context) => const GalleryPage(),
+
+    // =========================================================================
+    // HISTORY PAGE (Tracking Log)
+    // =========================================================================
+    AppRoutes.history: (context) => const HistoryPage(),
 
     // =========================================================================
     // PHOTO DETAIL PAGE (View Single Photo + Metadata)
@@ -44,6 +62,11 @@ Map<String, WidgetBuilder> getAppRoutes() {
     AppRoutes.detail: (context) => const PhotoDetailPage(),
 
     // =========================================================================
+    // TRACKING DETAIL PAGE (View Tracking Detail)
+    // =========================================================================
+    AppRoutes.trackingDetail: (context) => const TrackingDetailPage(),
+
+// =========================================================================
     // MAP PAGE (View Locations on Map)
     // =========================================================================
     AppRoutes.map: (context) => const MapPage(),
@@ -52,6 +75,11 @@ Map<String, WidgetBuilder> getAppRoutes() {
     // EXPORT PAGE (Export/Share Data)
     // =========================================================================
     AppRoutes.export: (context) => const ExportPage(),
+
+    // =========================================================================
+    // SETTINGS PAGE (App Settings)
+    // =========================================================================
+AppRoutes.settings: (context) => const SettingsPage(),
   };
 }
 

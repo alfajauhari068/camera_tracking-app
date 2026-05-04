@@ -53,6 +53,12 @@ dependencies:
   flutter_riverpod: ^2.5.1
   geolocator: ^14.0.2
 
+  # Settings persistence
+  shared_preferences: ^2.3.2
+
+  # Share functionality
+  share_plus: ^10.0.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

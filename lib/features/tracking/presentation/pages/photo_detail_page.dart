@@ -2,20 +2,21 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../../routes.dart' as app_routes;
 import '../../domain/entities/tracking.dart';
 import '../providers.dart';
 
 /// PHOTO DETAIL PAGE
-/// 
+///
 /// Tujuan: Menampilkan satu foto dengan metadata lengkap dan action buttons
 /// Route: /detail
-/// 
+///
 /// Arguments dapat berupa:
 /// 1. Tracking object (object): Navigator.pushNamed(..., arguments: tracking)
 /// 2. String ID (id): Navigator.pushNamed(..., arguments: trackingId)
-/// 
+///
 /// Pola yang disarankan: Pass Tracking object jika tersedia (dari Gallery)
 /// Jika hanya ID tersedia, page akan load dari repository
 class PhotoDetailPage extends ConsumerStatefulWidget {
@@ -33,10 +34,10 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    
+
     // Extract argument dari route settings
     final args = ModalRoute.of(context)?.settings.arguments;
-    
+
     if (args == null) {
       setState(() {
         _error = 'No tracking data provided';
@@ -133,9 +134,7 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
     if (_isLoading || _tracking == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Photo Detail')),
-        body: const Center(
-          child: CircularProgressIndicator(),
-        ),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -145,10 +144,7 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
     // DISPLAY STATE
     // =========================================================================
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Photo Detail'),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Photo Detail'), elevation: 0),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -186,7 +182,8 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
                   _MetadataCard(
                     icon: Icons.location_on,
                     label: 'Koordinat GPS',
-                    value: '${tracking.latitude.toStringAsFixed(6)}, ${tracking.longitude.toStringAsFixed(6)}',
+                    value:
+                        '${tracking.latitude.toStringAsFixed(6)}, ${tracking.longitude.toStringAsFixed(6)}',
                   ),
 
                   const SizedBox(height: 12),
@@ -226,7 +223,8 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
                       // View on Map Button
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: () => _navigateToMapWithLocation(context, tracking),
+                          onPressed: () =>
+                              _navigateToMapWithLocation(context, tracking),
                           icon: const Icon(Icons.map),
                           label: const Text('View on Map'),
                         ),
@@ -237,7 +235,7 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
                       // Share/Export Button
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: () => _navigateToExport(context, tracking),
+                          onPressed: () => _shareTracking(context, tracking),
                           icon: const Icon(Icons.share),
                           label: const Text('Share'),
                         ),
@@ -267,10 +265,7 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
           children: [
             Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
             SizedBox(height: 8),
-            Text(
-              'No image path',
-              style: TextStyle(color: Colors.grey),
-            ),
+            Text('No image path', style: TextStyle(color: Colors.grey)),
           ],
         ),
       );
@@ -314,13 +309,26 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
     );
   }
 
-  /// Navigate ke Export screen dengan filter preset untuk foto ini
-  void _navigateToExport(BuildContext context, Tracking tracking) {
-    app_routes.navigateTo(
-      context,
-      app_routes.AppRoutes.export,
-      arguments: tracking,
-    );
+  /// Share tracking data dengan foto dan link Google Maps
+  void _shareTracking(BuildContext context, Tracking tracking) {
+    final googleMapsUrl =
+        'https://www.google.com/maps/place/${tracking.latitude},${tracking.longitude}';
+
+    final shareText =
+        '''
+📍 Lokasi Tracking GPS
+
+Alamat: ${tracking.address}
+Koordinat: ${tracking.latitude.toStringAsFixed(6)}, ${tracking.longitude.toStringAsFixed(6)}
+Akurasi: ${tracking.accuracy.toStringAsFixed(2)} meter
+Waktu: ${_formatDateTime(tracking.timestamp)}
+
+Lihat di Google Maps: $googleMapsUrl
+''';
+
+    // Share foto bersama dengan pesan teks
+    final imageFile = XFile(tracking.imagePath);
+    Share.shareXFiles([imageFile], text: shareText);
   }
 
   /// Format DateTime untuk display
@@ -364,10 +372,7 @@ class _MetadataCard extends StatelessWidget {
                 children: [
                   Text(
                     label,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
-                    ),
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                   const SizedBox(height: 4),
                   Text(
