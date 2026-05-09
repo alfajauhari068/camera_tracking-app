@@ -79,8 +79,9 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
     });
 
     try {
-      final useCase = ref.read(getTrackingByIdProvider);
-      final tracking = await useCase.execute(trackingId);
+      // temporary resolver: use local repository directly (avoids missing provider)
+      final tracking = await ref.read(trackingRepositoryProvider).getTrackingById(trackingId);
+
 
       if (tracking == null) {
         setState(() {

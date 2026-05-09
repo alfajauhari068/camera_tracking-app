@@ -83,8 +83,9 @@ class HomePage extends StatelessWidget {
                   height: 70,
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      // Navigate to camera
-                      Navigator.pushNamed(context, '/camera');
+                      // Navigate to camera tracking (kamera utama)
+                      Navigator.pushNamed(context, '/camera-tracking');
+
                     },
                     icon: const Icon(Icons.camera_alt, size: 32, color: Colors.white),
                     label: const Text(

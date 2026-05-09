@@ -7,6 +7,7 @@ import '../services/geocoding_service.dart';
 import '../services/id_generator.dart';
 import '../services/location_service.dart';
 import '../services/logger.dart';
+import '../services/permission_service.dart';
 import '../services/time_provider.dart';
 
 class CaptureTracking {
@@ -16,6 +17,7 @@ class CaptureTracking {
   final GeocodingService _geocodingService;
   final IdGenerator _idGenerator;
   final TimeProvider _timeProvider;
+  final PermissionService _permissionService;
   final Logger _logger;
 
   // Concurrency guard - prevents multiple simultaneous executions
@@ -28,6 +30,7 @@ class CaptureTracking {
     required GeocodingService geocodingService,
     required IdGenerator idGenerator,
     required TimeProvider timeProvider,
+    required PermissionService permissionService,
     required Logger logger,
   }) :
     _repository = repository,
@@ -36,34 +39,59 @@ class CaptureTracking {
     _geocodingService = geocodingService,
     _idGenerator = idGenerator,
     _timeProvider = timeProvider,
+    _permissionService = permissionService,
     _logger = logger;
 
-  /// Execute the capture phase: camera → GPS → geocode → save
-  /// IMPORTANT: Permissions must be granted BEFORE calling this (handled in UI initialization phase)
+  /// Execute the complete capture flow: permissions → camera → GPS → geocode → save
   /// Returns Result&lt;Tracking&gt; for controlled error flow (not exception-based)
   /// STRICT MODE: All steps must succeed, no partial data saved
   Future<Result<Tracking>> execute() async {
     // Concurrency guard - prevent multiple simultaneous executions
     if (_isRunning) {
-      _logger.warning('[CaptureTracking] Capture already in progress, rejecting duplicate request');
+      _logger.warning('[CaptureTracking] Execution already in progress, rejecting duplicate request');
       return Result.failure(GenericFailure('Capture already in progress. Please wait.'));
     }
 
     _isRunning = true;
-    _logger.log('[CaptureTracking] Starting photo + GPS + geocoding capture');
+    _logger.log('[CaptureTracking] Starting capture tracking flow');
 
     try {
-      // ===== STEP 1: Capture Photo + Save to Persistent Storage =====
-      _logger.log('[CaptureTracking] Step 1: Capturing and persisting photo...');
+      // Step 1: Check permissions
+      _logger.log('[CaptureTracking] Checking permissions...');
       
-      final imagePath = await _cameraService.takePicture();
-      // NOTE: takePicture() now returns PERSISTENT path, verified to exist
-      
-      _logger.log('[CaptureTracking] ✅ Photo persisted at: $imagePath');
+      // Check camera permission
+      final cameraPermission = await _permissionService.requestCameraPermission();
+      if (cameraPermission == PermissionStatus.deniedForever) {
+        _logger.error('[CaptureTracking] Camera permission permanently denied');
+        return Result.failure(
+          PermissionDeniedForeverFailure('Camera permission denied permanently. Please enable it in app settings.')
+        );
+      }
+      if (cameraPermission != PermissionStatus.granted) {
+        _logger.error('[CaptureTracking] Camera permission denied');
+        return Result.failure(CameraFailure('Camera permission denied. Please grant camera access.'));
+      }
 
-      // ===== STEP 2: Get Location =====
-      _logger.log('[CaptureTracking] Step 2: Getting GPS location...');
-      
+      // Check location permission
+      final locationPermission = await _permissionService.requestLocationPermission();
+      if (locationPermission == PermissionStatus.deniedForever) {
+        _logger.error('[CaptureTracking] Location permission permanently denied');
+        return Result.failure(
+          PermissionDeniedForeverFailure('Location permission denied permanently. Please enable it in app settings.')
+        );
+      }
+      if (locationPermission != PermissionStatus.granted) {
+        _logger.error('[CaptureTracking] Location permission denied');
+        return Result.failure(LocationFailure('Location permission denied. Please grant location access.'));
+      }
+
+      // Step 2: Capture image
+      _logger.log('[CaptureTracking] Capturing image...');
+      final imagePath = await _cameraService.takePicture();
+      _logger.log('[CaptureTracking] Image captured: $imagePath');
+
+      // Step 3: Get location with timeout
+      _logger.log('[CaptureTracking] Getting location...');
       final location = await _locationService.getLocation().timeout(
         const Duration(seconds: 10),
         onTimeout: () {
@@ -71,12 +99,10 @@ class CaptureTracking {
           throw LocationTimeoutFailure('Location request timed out after 10 seconds. Please check GPS signal.');
         },
       );
-      
-      _logger.log('[CaptureTracking] ✅ Location obtained: ${location.latitude}, ${location.longitude}');
+      _logger.log('[CaptureTracking] Location obtained: ${location.latitude}, ${location.longitude}');
 
-      // ===== STEP 3: Geocode Address =====
-      _logger.log('[CaptureTracking] Step 3: Geocoding address...');
-      
+      // Step 4: Geocode address with STRICT MODE (no fallback)
+      _logger.log('[CaptureTracking] Geocoding address...');
       final address = await _geocodingService.getAddress(
         location.latitude,
         location.longitude,
@@ -88,33 +114,21 @@ class CaptureTracking {
           throw GeocodingTimeoutFailure('Address lookup timed out after 5 seconds. STRICT mode enforced - no partial data.');
         },
       );
-      
-      _logger.log('[CaptureTracking] ✅ Address geocoded: $address');
+      _logger.log('[CaptureTracking] Address geocoded: $address');
 
-      // ===== STEP 4: Create Tracking Entity =====
-      // IMPORTANT: imagePath sekarang guaranteed valid (file exists)
-      _logger.log('[CaptureTracking] Step 4: Creating Tracking entity...');
-      
+      // Step 5: Create and save tracking
       final tracking = Tracking(
         id: _idGenerator.generate(),
-        imagePath: imagePath,  // 🔑 VALID persistent path, not temp
+        imagePath: imagePath,
         latitude: location.latitude,
         longitude: location.longitude,
         address: address,
         accuracy: location.accuracy,
         timestamp: _timeProvider.now(),
       );
-      
-      _logger.log('[CaptureTracking] Tracking entity created: '
-          'id=${tracking.id}, imagePath=${tracking.imagePath}');
 
-      // ===== STEP 5: Save to Repository =====
-      _logger.log('[CaptureTracking] Step 5: Saving to repository...');
-      
       await _repository.saveTracking(tracking);
-      
-      _logger.log('[CaptureTracking] ✅ Tracking saved to repository');
-      _logger.log('[CaptureTracking] 🎉 Capture pipeline complete!');
+      _logger.log('[CaptureTracking] Tracking saved successfully');
 
       return Result.success(tracking);
     } on PermissionDeniedForeverFailure catch (failure) {

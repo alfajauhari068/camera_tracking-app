@@ -480,7 +480,7 @@ class HomePage extends StatelessWidget {
           ElevatedButton(
             onPressed: () => app_routes.navigateTo(
               context,
-              app_routes.AppRoutes.camera,
+              app_routes.AppRoutes.cameraTracking,
             ),
             child: const Text('Take Photo'),
           ),

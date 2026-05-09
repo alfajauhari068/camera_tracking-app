@@ -245,7 +245,7 @@ class ReplaceNavigationExample extends StatelessWidget {
   /// (bukan push, jadi tidak bisa back ke camera)
   void _navigateToCameraAndReplaceOnSuccess(BuildContext context) {
     // Step 1: Push camera screen
-    Navigator.pushNamed(context, app_routes.AppRoutes.camera);
+    Navigator.pushNamed(context, app_routes.AppRoutes.cameraTracking);
 
     // Step 2: Di dalam CaptureScreen, setelah sukses capture:
     // Navigator.pushReplacementNamed(context, AppRoutes.gallery);

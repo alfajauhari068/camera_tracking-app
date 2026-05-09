@@ -1,0 +1,151 @@
+﻿Analyzing camera_tracking_gps...                                
+
+   info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:17:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:20:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:27:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:32:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:42:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:51:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:52:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:59:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:63:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:68:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:72:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:78:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:90:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:97:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:106:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:109:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:124:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:127:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:133:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:137:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:148:5 - avoid_print
+  error - Missing concrete implementations of 'CameraService.getController', 'CameraService.init', and 'CameraService.isInitialized' - lib\features\tracking\data\services\real_camera_service.dart:10:7 - non_abstract_class_inherits_abstract_member
+   info - The member 'dispose' overrides an inherited member but isn't annotated with '@override' - lib\features\tracking\data\services\real_camera_service.dart:115:16 - annotate_overrides
+warning - Unused import: 'package:flutter/material.dart' - lib\features\tracking\domain\entities\app_settings.dart:1:8 - unused_import
+   info - Dangling library doc comment - lib\features\tracking\presentation\DEVELOPER_NAVIGATION_GUIDE.dart:1:1 - dangling_library_doc_comments
+   info - The file name 'DEVELOPER_NAVIGATION_GUIDE.dart' isn't a lower_case_with_underscores identifier - lib\features\tracking\presentation\DEVELOPER_NAVIGATION_GUIDE.dart:1:1 - file_names
+   info - Dangling library doc comment - lib\features\tracking\presentation\DEVELOPER_NAVIGATION_GUIDE.dart:2:1 - dangling_library_doc_comments
+   info - Dangling library doc comment - lib\features\tracking\presentation\DEVELOPER_NAVIGATION_GUIDE.dart:3:1 - dangling_library_doc_comments
+   info - Dangling library doc comment - lib\features\tracking\presentation\DEVELOPER_NAVIGATION_GUIDE.dart:4:1 - dangling_library_doc_comments
+   info - Dangling library doc comment - lib\features\tracking\presentation\NAVIGATION_EXAMPLES.dart:1:1 - dangling_library_doc_comments
+   info - The file name 'NAVIGATION_EXAMPLES.dart' isn't a lower_case_with_underscores identifier - lib\features\tracking\presentation\NAVIGATION_EXAMPLES.dart:1:1 - file_names
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\NAVIGATION_EXAMPLES.dart:298:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:20:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:21:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:22:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:23:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:24:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:25:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:28:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:30:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:31:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:33:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:41:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:42:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:43:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:44:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:47:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:51:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:57:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:58:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:59:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:61:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:62:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:63:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:67:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:68:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:70:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:77:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:78:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:79:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:80:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:83:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:86:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:87:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:92:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:97:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:100:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:101:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:105:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:108:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:111:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:112:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:114:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:125:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:127:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:130:7 - avoid_print
+   info - The private field _locationLoading could be 'final' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:93:8 - prefer_final_fields
+   info - The private field _overlayConfig could be 'final' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:101:17 - prefer_final_fields
+   info - The private field _meta could be 'final' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:103:16 - prefer_final_fields
+  error - Methods can't be invoked in constant expressions - lib\features\tracking\presentation\pages\camera_tracking_page.dart:107:16 - const_eval_method_invocation
+  error - The method '_refreshLocationData' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:130:13 - undefined_method
+  error - The method '_ThirdsGridPainter' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:249:44 - undefined_method
+  error - The method '_InfoOverlay' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:271:26 - undefined_method
+  error - The method '_BottomModeSelector' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:297:9 - undefined_method
+  error - The method '_BottomActionBar' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:310:9 - undefined_method
+  error - The method '_TopIconButton' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:343:13 - undefined_method
+  error - The method '_TopIconButton' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:351:17 - undefined_method
+  error - The method '_TopIconButton' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:357:17 - undefined_method
+  error - The method '_TopIconButton' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:363:17 - undefined_method
+  error - The method '_TopIconButton' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:369:17 - undefined_method
+  error - The method '_TopIconButton' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:379:17 - undefined_method
+  error - The method '_TopIconButton' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:385:17 - undefined_method
+  error - The method '_TopIconButton' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:391:17 - undefined_method
+  error - The method '_refreshLocationData' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:441:11 - undefined_method
+   info - 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre - lib\features\tracking\presentation\pages\camera_tracking_page.dart:480:13 - deprecated_member_use
+   info - 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre - lib\features\tracking\presentation\pages\camera_tracking_page.dart:486:13 - deprecated_member_use
+  error - The method '_handleVideoRecording' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:510:17 - undefined_method
+  error - The method '_handleReportingCapture' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:513:17 - undefined_method
+  error - The method '_refreshLocationData' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:527:13 - undefined_method
+  error - The method 'Clipboard' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:581:23 - undefined_method
+  error - Undefined name 'ClipboardDataFormat' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:581:54 - undefined_identifier
+  error - Undefined name '_' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:582:5 - undefined_identifier
+  error - Undefined name 'Clipboard' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:590:13 - undefined_identifier
+  error - The method 'ClipboardData' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:590:31 - undefined_method
+  error - The method '_formatDateTime' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:606:16 - undefined_method
+  error - The method '_refreshLocationData' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:630:13 - undefined_method
+  error - Unterminated string literal - lib\features\tracking\presentation\pages\camera_tracking_page.dart:663:76 - unterminated_string_literal
+  error - Expected to find ')' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:664:1 - expected_token
+  error - Expected to find ';' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:664:1 - expected_token
+  error - Expected to find '}' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:664:1 - expected_token
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\features\tracking\presentation\pages\export_page.dart:143:15 - deprecated_member_use
+  error - Undefined name 'exportTrackingsProvider' - lib\features\tracking\presentation\pages\export_page.dart:253:33 - undefined_identifier
+   info - Unnecessary use of multiple underscores - lib\features\tracking\presentation\pages\history_page.dart:308:43 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\features\tracking\presentation\pages\history_page.dart:308:47 - unnecessary_underscores
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\history_page.dart:384:36 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\home_page.dart:157:29 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\home_page.dart:159:48 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\home_page.dart:166:28 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\home_page.dart:189:49 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\home_page.dart:189:80 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\home_page.dart:233:35 - deprecated_member_use
+warning - Unused import: '../../domain/entities/tracking.dart' - lib\features\tracking\presentation\pages\map_page.dart:6:8 - unused_import
+  error - Undefined name 'getTrackingByIdProvider' - lib\features\tracking\presentation\pages\photo_detail_page.dart:82:32 - undefined_identifier
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\tracking_detail_page.dart:91:34 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\tracking_detail_page.dart:145:52 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\features\tracking\presentation\pages\tracking_detail_page.dart:237:101 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\features\tracking\presentation\pages\tracking_detail_page.dart:237:105 - unnecessary_underscores
+   info - Angle brackets will be interpreted as HTML - lib\features\tracking\presentation\tracking_providers.dart:12:25 - unintended_html_in_doc_comment
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\tracking_providers.dart:30:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\tracking_providers.dart:37:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\tracking_providers.dart:43:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\tracking_providers.dart:44:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\tracking_providers.dart:53:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\tracking_providers.dart:64:7 - avoid_print
+   info - 'desiredAccuracy' is deprecated and shouldn't be used. use settings parameter with AndroidSettings, AppleSettings, WebSettings, or LocationSettings - lib\features\tracking\presentation\tracking_providers.dart:69:7 - deprecated_member_use
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\tracking_providers.dart:71:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\tracking\presentation\tracking_providers.dart:74:5 - avoid_print
+   info - Angle brackets will be interpreted as HTML - lib\features\tracking\presentation\tracking_providers.dart:83:24 - unintended_html_in_doc_comment
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\widgets\photo_card.dart:63:36 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\widgets\photo_card.dart:105:39 - deprecated_member_use
+warning - Unused import: 'features/tracking/presentation/pages/home_page.dart' - lib\routes.dart:8:8 - unused_import
+
+flutter : 141 issues found. (ran in 7.7s)
+At line:1 char:1
++ flutter analyze 2>&1 | Out-File -Encoding UTF8 -FilePath analyze_outp ...
++ ~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (141 issues found. (ran in 7.7s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 

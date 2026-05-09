@@ -28,10 +28,10 @@ class AppRoutes {
 /// Route generator - maps route paths ke widget pages
 Map<String, WidgetBuilder> getAppRoutes() {
   return {
-    // =========================================================================
-    // HOME PAGE (Dashboard)
-    // =========================================================================
-    AppRoutes.home: (context) => const HomePage(),
+    // NOTE:
+    // '/' tidak didefinisikan di sini karena entry point app memakai `home:`
+    // di main.dart (home: const CameraTrackingPage()).
+
 
     // =========================================================================
     // CAMERA PAGE (Take Photo - Original)
@@ -79,9 +79,10 @@ Map<String, WidgetBuilder> getAppRoutes() {
     // =========================================================================
     // SETTINGS PAGE (App Settings)
     // =========================================================================
-AppRoutes.settings: (context) => const SettingsPage(),
+    AppRoutes.settings: (context) => const SettingsPage(),
   };
 }
+
 
 /// ON GENERATE ROUTE - untuk handling arguments & route params
 /// Gunakan ini jika perlu parsing arguments yang lebih kompleks

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'routes.dart';
+import 'features/tracking/presentation/pages/camera_tracking_page.dart';
+
 
 void main() {
   runApp(const ProviderScope(child: MyApp()));
@@ -101,9 +103,15 @@ class MyApp extends StatelessWidget {
       // ROUTING CONFIGURATION
       // ========================================================================
       
-      // Option 1: Menggunakan named routes biasa
+      // Pastikan halaman pertama saat app dibuka adalah CameraTrackingPage.
+      // Menggunakan `home` agar Flutter langsung menampilkan halaman ini saat run.
+      home: const CameraTrackingPage(),
+
+      // Tetap definisikan named routes untuk navigasi lanjutan.
+      // Catatan: `initialRoute` tidak diperlukan jika `home` dipakai.
       routes: getAppRoutes(),
-      initialRoute: AppRoutes.home,
+
+
 
       // Option 2: Menggunakan onGenerateRoute untuk lebih advanced
       // (uncomment jika ingin menggunakan route arguments parsing)

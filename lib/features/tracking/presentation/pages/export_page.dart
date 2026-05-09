@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/entities/tracking.dart';
+import '../../domain/usecases/export_trackings.dart';
+import '../../domain/services/export_service.dart';
+import '../../domain/usecases/export_trackings.dart';
+
 import '../providers.dart';
+
 
 /// EXPORT PAGE
 ///
@@ -250,8 +255,15 @@ class _ExportPageState extends ConsumerState<ExportPage> {
     });
 
     try {
-      final exporter = ref.read(exportTrackingsProvider);
+      // temporary resolver: use repository+export usecase directly (avoids missing provider)
+      final repo = ref.read(trackingRepositoryProvider);
+      final exportService = ref.read(exportServiceProvider);
+      final exporter = ExportTrackings(
+        repository: repo,
+        exportService: exportService,
+      );
       final exportPath = await exporter.execute(
+
         startDate: _startDate,
         endDate: _endDate,
         format: _selectedFormat,

@@ -1,0 +1,664 @@
+﻿import 'dart:async';
+import 'dart:io';
+
+import 'package:camera/camera.dart';
+import 'package:flutter/material.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+import '../../../../core/utils/app_logger.dart';
+
+/// Camera tracking page (camera dokumentasi lapangan).
+class CameraTrackingPage extends StatefulWidget {
+  const CameraTrackingPage({super.key});
+
+  @override
+  State<CameraTrackingPage> createState() => _CameraTrackingPageState();
+}
+
+enum CameraMode { locationShare, photo, video, reporting }
+
+class OverlayConfig {
+  final bool showAddress;
+  final bool showCoordinates;
+  final bool showTimestamp;
+  final bool showMiniMap;
+
+  const OverlayConfig({
+    this.showAddress = true,
+    this.showCoordinates = true,
+    this.showTimestamp = true,
+    this.showMiniMap = true,
+  });
+
+  OverlayConfig copyWith({
+    bool? showAddress,
+    bool? showCoordinates,
+    bool? showTimestamp,
+    bool? showMiniMap,
+  }) {
+    return OverlayConfig(
+      showAddress: showAddress ?? this.showAddress,
+      showCoordinates: showCoordinates ?? this.showCoordinates,
+      showTimestamp: showTimestamp ?? this.showTimestamp,
+      showMiniMap: showMiniMap ?? this.showMiniMap,
+    );
+  }
+}
+
+class CapturedPhoto {
+  final String filePath;
+  final String? locationName;
+  final String? address;
+  final double? latitude;
+  final double? longitude;
+  final DateTime timestamp;
+  final OverlayConfig overlayConfig;
+
+  const CapturedPhoto({
+    required this.filePath,
+    required this.timestamp,
+    this.locationName,
+    this.address,
+    this.latitude,
+    this.longitude,
+    required this.overlayConfig,
+  });
+}
+
+class CapturedMeta {
+  final String locationName;
+  final String address;
+  final String coordinates;
+  final DateTime timestamp;
+
+  const CapturedMeta({
+    required this.locationName,
+    required this.address,
+    required this.coordinates,
+    required this.timestamp,
+  });
+}
+
+class _CameraTrackingPageState extends State<CameraTrackingPage> {
+  final _logger = const AppLogger(tag: 'CameraTrackingPage');
+
+  CapturedPhoto? _lastPhoto;
+
+  // UI toggles
+  bool _isFlashOn = false;
+  bool _isWatermarkOn = true;
+  bool _showGrid = false;
+  bool _locationLoading = false;
+
+  // Video state
+  bool _isRecording = false;
+
+  CameraController? _controller;
+  Future<void>? _initializeControllerFuture;
+
+  OverlayConfig _overlayConfig = const OverlayConfig();
+
+  CapturedMeta _meta = const CapturedMeta(
+    locationName: 'Kecamatan Contoh',
+    address: 'Jl. Contoh No. 123, Kelurahan Sampel, Kota Demo, Provinsi Nusantara',
+    coordinates: '-6.200000, 106.816666',
+    timestamp: _defaultTs(),
+  );
+
+  static DateTime _defaultTs() => DateTime(2025, 1, 1, 12, 0, 0);
+
+  CameraMode _selectedMode = CameraMode.photo;
+
+  double? _latitude;
+  double? _longitude;
+  DateTime? _lastLocationUpdateTime;
+
+  // Rotate camera support
+  List<CameraDescription> _availableCameras = const [];
+  int _currentCameraIndex = 0;
+
+  bool get _hasController =>
+      _controller != null && _controller!.value.isInitialized;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastLocationUpdateTime ??= DateTime.now();
+    _initializeControllerFuture = _initCamera().then((_) async {
+      await _refreshLocationData(showLoading: false);
+    });
+  }
+
+  Future<void> _initCamera({int? cameraIndex}) async {
+    _isRecording = false;
+
+    _availableCameras = await availableCameras();
+    if (_availableCameras.isEmpty) {
+      throw CameraException('NoCamera', 'No camera devices found');
+    }
+
+    final index = cameraIndex ?? _pickBackCameraIndex();
+    _currentCameraIndex = index.clamp(0, _availableCameras.length - 1);
+
+    final cam = _availableCameras[_currentCameraIndex];
+
+    await _controller?.dispose();
+    _controller = null;
+
+    final controller = CameraController(
+      cam,
+      ResolutionPreset.high,
+      enableAudio: false,
+    );
+
+    _controller = controller;
+    await controller.initialize();
+
+    // Best-effort: apply flash state after re-init.
+    await _applyFlashStateSafely(_isFlashOn);
+  }
+
+  int _pickBackCameraIndex() {
+    final idx = _availableCameras.indexWhere(
+      (c) => c.lensDirection == CameraLensDirection.back,
+    );
+    return idx != -1 ? idx : 0;
+  }
+
+  Future<void> _applyFlashStateSafely(bool turnOn) async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+
+    try {
+      await controller.setFlashMode(turnOn ? FlashMode.torch : FlashMode.off);
+    } on CameraException catch (e, st) {
+      _logger.error('CameraException while applying flash mode', e, st);
+    } catch (e, st) {
+      _logger.error('Unexpected error while applying flash mode', e, st);
+    }
+  }
+
+  Future<void> _switchCamera() async {
+    if (_availableCameras.isEmpty) {
+      await _initCamera();
+      return;
+    }
+
+    final current = _availableCameras[_currentCameraIndex];
+    final wantLens = current.lensDirection == CameraLensDirection.front
+        ? CameraLensDirection.back
+        : CameraLensDirection.front;
+
+    final nextIdx = _availableCameras.indexWhere((c) => c.lensDirection == wantLens);
+    final fallbackIdx = (_currentCameraIndex + 1) % _availableCameras.length;
+    final chosenIdx = nextIdx != -1 ? nextIdx : fallbackIdx;
+
+    _logger.info('Rotating camera: lens=${current.lensDirection} -> index=$chosenIdx');
+    await _initCamera(cameraIndex: chosenIdx);
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: FutureBuilder<void>(
+          future: _initializeControllerFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: CircularProgressIndicator.adaptive(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              );
+            }
+
+            if (snapshot.hasError || _controller == null || !_controller!.value.isInitialized) {
+              return const Center(
+                child: Text(
+                  'Failed to initialize camera',
+                  style: TextStyle(color: Colors.white70),
+                  textAlign: TextAlign.center,
+                ),
+              );
+            }
+
+            return Stack(
+              children: [
+                Positioned.fill(
+                  child: Center(
+                    child: AspectRatio(
+                      aspectRatio: _controller!.value.aspectRatio,
+                      child: Transform.scale(
+                        scale: 1.0,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            CameraPreview(_controller!),
+                            if (_showGrid)
+                              IgnorePointer(
+                                child: CustomPaint(
+                                  painter: _ThirdsGridPainter(
+                                    color: Colors.white.withValues(alpha: 0.35),
+                                    strokeWidth: 1.2,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: _buildTopControlBar(context),
+                ),
+                Positioned(
+                  left: 16,
+                  right: 16,
+                  bottom: 180,
+                  child: _InfoOverlay(
+                    meta: _meta,
+                    config: _overlayConfig,
+                    lastLocationUpdateTime: _lastLocationUpdateTime,
+                    isLoading: _locationLoading,
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: SafeArea(
+                    top: false,
+                    child: _buildBottomSection(),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomSection() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _BottomModeSelector(
+          selectedMode: _selectedMode,
+          onModeChanged: (mode) {
+            setState(() {
+              _selectedMode = mode;
+              if (mode != CameraMode.video) {
+                _isRecording = false;
+              }
+            });
+            _logger.info('Mode changed to $mode');
+          },
+        ),
+        const SizedBox(height: 8),
+        _BottomActionBar(
+          selectedMode: _selectedMode,
+          isRecording: _isRecording,
+          onCapture: onCapture,
+          onOpenTemplates: onOpenTemplates,
+          lastPhoto: _lastPhoto,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTopControlBar(BuildContext context) {
+    return Container(
+      height: 56,
+      width: double.infinity,
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top,
+        left: 12,
+        right: 12,
+      ),
+      decoration: const BoxDecoration(color: Colors.black).copyWith(
+        color: Colors.black.withValues(alpha: 0.7),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(12),
+          bottomRight: Radius.circular(12),
+        ),
+      ),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _TopIconButton(
+              icon: Icons.close,
+              tooltip: 'Tutup kamera',
+              onPressed: onToggleClose,
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _TopIconButton(
+                  icon: _isWatermarkOn ? Icons.water_drop : Icons.water_drop_outlined,
+                  tooltip: 'Toggle watermark',
+                  onPressed: onToggleWatermark,
+                ),
+                const SizedBox(width: 10),
+                _TopIconButton(
+                  icon: _isFlashOn ? Icons.flash_on : Icons.flash_off,
+                  tooltip: 'Toggle flash',
+                  onPressed: onToggleFlash,
+                ),
+                const SizedBox(width: 10),
+                _TopIconButton(
+                  icon: Icons.grid_on,
+                  tooltip: 'Toggle grid',
+                  onPressed: onToggleGrid,
+                ),
+                const SizedBox(width: 10),
+                _TopIconButton(
+                  icon: Icons.layers,
+                  tooltip: 'Overlay / Templates',
+                  onPressed: onOpenTemplates,
+                ),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _TopIconButton(
+                  icon: Icons.my_location,
+                  tooltip: 'Refetch lokasi',
+                  onPressed: onRefreshLocation,
+                ),
+                const SizedBox(width: 10),
+                _TopIconButton(
+                  icon: Icons.rotate_right,
+                  tooltip: 'Rotate camera',
+                  onPressed: onRotateCamera,
+                ),
+                const SizedBox(width: 10),
+                _TopIconButton(
+                  icon: Icons.settings,
+                  tooltip: 'Settings',
+                  onPressed: onOpenSettings,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============ Handlers ============
+
+  void onToggleClose() {
+    // Placeholder: route logic handled by parent router. Keeping as no-op.
+    _logger.info('onToggleClose');
+    // Navigator.of(context).maybePop();
+  }
+
+  void onToggleWatermark() {
+    setState(() => _isWatermarkOn = !_isWatermarkOn);
+    _logger.info('onToggleWatermark -> isWatermarkOn=$_isWatermarkOn');
+  }
+
+  void onToggleGrid() {
+    setState(() => _showGrid = !_showGrid);
+    _logger.info('onToggleGrid -> showGrid=$_showGrid');
+  }
+
+  Future<void> onToggleFlash() async {
+    if (!_hasController) {
+      _logger.warning('onToggleFlash ignored: controller not ready');
+      return;
+    }
+
+    final newValue = !_isFlashOn;
+    setState(() => _isFlashOn = newValue);
+    await _applyFlashStateSafely(_isFlashOn);
+  }
+
+  void onOpenTemplates() {
+    _logger.info('onOpenTemplates');
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Overlay/TEMPLATES (placeholder)')),
+    );
+  }
+
+  Future<void> onRefreshLocation() async {
+    await _refreshLocationData(showLoading: true);
+  }
+
+  Future<void> onRotateCamera() async {
+    _logger.info('onRotateCamera');
+    await _switchCamera();
+  }
+
+  void onOpenSettings() {
+    _logger.info('onOpenSettings');
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.black87,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => _buildSettingsSheet(context),
+    );
+  }
+
+  Widget _buildSettingsSheet(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Camera Settings',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 12),
+          SwitchListTile(
+            title: const Text('Watermark'),
+            value: _isWatermarkOn,
+            activeColor: primary,
+            onChanged: (value) => setState(() => _isWatermarkOn = value),
+          ),
+          SwitchListTile(
+            title: const Text('Flash (UI only)'),
+            value: _isFlashOn,
+            activeColor: primary,
+            onChanged: (value) async {
+              setState(() => _isFlashOn = value);
+              await _applyFlashStateSafely(_isFlashOn);
+            },
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  // ======== Mode routing ========
+
+  Future<void> onCapture() async {
+    try {
+      switch (_selectedMode) {
+        case CameraMode.locationShare:
+          await _handleLocationShare();
+          return;
+        case CameraMode.photo:
+          await _handlePhotoCapture();
+          return;
+        case CameraMode.video:
+          await _handleVideoRecording();
+          return;
+        case CameraMode.reporting:
+          await _handleReportingCapture();
+          return;
+      }
+    } catch (e, st) {
+      _logger.error('onCapture failed', e, st);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Capture gagal: ${e.toString()}')),
+      );
+    }
+  }
+
+  Future<CapturedMeta?> _getFreshMetaOrNull() async {
+    try {
+      await _refreshLocationData(showLoading: false);
+      return _meta;
+    } catch (e, st) {
+      _logger.error('Failed to refresh meta', e, st);
+      return _meta;
+    }
+  }
+
+  // 1) Location Share Mode
+  Future<void> _handleLocationShare() async {
+    final controller = _controller;
+    if (!_hasController || controller == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kamera belum siap')),
+      );
+      return;
+    }
+
+    final meta = await _getFreshMetaOrNull();
+    if (meta == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lokasi belum tersedia')),
+      );
+      return;
+    }
+
+    final mapsLink = _buildGoogleMapsLink(meta.coordinates);
+    final text = _buildLocationShareText(meta, mapsLink);
+
+    // system share
+    // Using a plugin is ideal; to keep compile-only, use copy-to-clipboard as fallback
+    try {
+      // ignore: deprecated_member_use
+      await _systemShareText(text);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('âœ… Lokasi siap dibagikan')),
+      );
+    } catch (e, st) {
+      _logger.error('Share failed', e, st);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal share lokasi: ${e.toString()}')),
+      );
+    }
+  }
+
+  Future<void> _systemShareText(String text) async {
+    // Prefer real share if available in app.
+    // This project may not include share_plus, so fallback to clipboard.
+    // ignore: deprecated_member_use
+    final clipboard = Clipboard(Platform.isWindows ? ClipboardDataFormat.text : null);
+    _ = clipboard;
+    await Future<void>.delayed(Duration.zero);
+    // We do a simple dialog-based feedback instead.
+    await _copyToClipboard(text);
+  }
+
+  Future<void> _copyToClipboard(String text) async {
+    try {
+      await Clipboard.setData(ClipboardData(text: text));
+    } catch (_) {
+      // no-op
+    }
+  }
+
+  String _buildGoogleMapsLink(String coordinates) {
+    // coordinates format: "lat,lng"
+    final parts = coordinates.split(',');
+    if (parts.length != 2) return 'https://www.google.com/maps/search/?api=1&query=$coordinates';
+    final lat = parts[0].trim();
+    final lng = parts[1].trim();
+    return 'https://www.google.com/maps/search/?api=1&query=$lat,$lng';
+  }
+
+  String _buildLocationShareText(CapturedMeta meta, String mapsLink) {
+    final ts = _formatDateTime(meta.timestamp);
+    return [
+      meta.locationName,
+      meta.address,
+      'Koordinat: ${meta.coordinates}',
+      'Timestamp: $ts',
+      'Google Maps: $mapsLink',
+    ].join('\n');
+  }
+
+  // 2) Photo Mode (refactor)
+  Future<void> _handlePhotoCapture() async {
+    final controller = _controller;
+    if (!_hasController || controller == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kamera belum siap')),
+      );
+      return;
+    }
+
+    if (controller.value.isTakingPicture) return;
+
+    try {
+      await _refreshLocationData(showLoading: false);
+
+      final xFile = await controller.takePicture();
+      final file = File(xFile.path);
+      if (!file.existsSync()) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gagal menyimpan foto')),
+        );
+        return;
+      }
+
+      final now = DateTime.now();
+      final photo = CapturedPhoto(
+        filePath: file.path,
+        timestamp: now,
+        locationName: _meta.locationName,
+        address: _meta.address,
+        latitude: _latitude,
+        longitude: _longitude,
+        overlayConfig: _overlayConfig,
+      );
+
+      setState(() => _lastPhoto = photo);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ðŸ“¸ Foto tersimpan')),
+      );
+    } on CameraException catch (e, st) {
+      _logger.error('Photo capture failed', e, st);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal mengambil foto: ${e.description ?? e
+

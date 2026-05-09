@@ -1,192 +1,99 @@
-import 'dart:io';
-
 import 'package:camera/camera.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../../../core/error/failures.dart';
 import '../../domain/services/camera_service.dart';
 import '../../domain/services/logger.dart';
+import '../../domain/services/permission_service.dart';
 
-/// Real camera service implementation using camera plugin
-/// Supports persistent camera session with preview for manual capture
-/// IMPORTANT: takePicture() now persists photo to app-controlled storage
+/// Real camera service implementation using camera plugin.
+///
+/// Implements the full `CameraService` contract from `domain/services/camera_service.dart`.
 class RealCameraService implements CameraService {
+  final PermissionService permissionService;
   final Logger logger;
 
   CameraController? _controller;
   List<CameraDescription>? _cameras;
-  bool _isInitialized = false;
 
-  // Directory untuk menyimpan foto tracking
-  static const String _photoDirName = 'tracking_photos';
+  RealCameraService({
+    required this.permissionService,
+    required this.logger,
+  });
 
-  RealCameraService({required this.logger});
-
-  /// Initialize camera for preview session (persistent)
-  /// Must be called before accessing preview or taking pictures
   @override
   Future<void> init() async {
-    if (_isInitialized) {
-      logger.log('[CameraService] Camera already initialized');
-      return;
+    if (_controller != null && _controller!.value.isInitialized) return;
+
+    logger.log('[CameraService] Initializing camera session...');
+
+    // Permission
+    final permissionStatus = await permissionService.requestCameraPermission();
+    if (permissionStatus == PermissionStatus.deniedForever) {
+      throw CameraFailure(
+        'Camera permission permanently denied. Please enable in app settings.',
+      );
+    }
+    if (permissionStatus != PermissionStatus.granted) {
+      throw CameraFailure('Camera permission denied. Please grant camera access.');
     }
 
-    try {
-      logger.log('[CameraService] Initializing camera session...');
-
-      // Get available cameras
-      _cameras ??= await availableCameras();
-      if (_cameras!.isEmpty) {
-        logger.error('[CameraService] No cameras available');
-        throw CameraFailure('No camera available on this device');
-      }
-
-      // Select back camera
-      final backCamera = _cameras!.firstWhere(
-        (camera) => camera.lensDirection == CameraLensDirection.back,
-        orElse: () => _cameras!.first,
-      );
-
-      // Create and initialize controller (persistent for preview)
-      _controller = CameraController(
-        backCamera,
-        ResolutionPreset.medium,
-        enableAudio: false,
-      );
-
-      await _controller!.initialize();
-      _isInitialized = true;
-      logger.log('[CameraService] Camera initialized successfully');
-    } on CameraException catch (e) {
-      logger.error(
-        '[CameraService] Camera exception during init: ${e.code}',
-        e,
-      );
-      throw _mapCameraException(e);
-    } catch (e) {
-      logger.error('[CameraService] Unexpected error during init', e);
-      throw CameraFailure('Failed to initialize camera: $e');
+    // Cameras
+    _cameras ??= await availableCameras();
+    if (_cameras!.isEmpty) {
+      throw CameraFailure('No camera available on this device');
     }
+
+    final backCamera = _cameras!.firstWhere(
+      (camera) => camera.lensDirection == CameraLensDirection.back,
+      orElse: () => _cameras!.first,
+    );
+
+    final controller = CameraController(
+      backCamera,
+      ResolutionPreset.medium,
+      enableAudio: false,
+    );
+
+    await controller.initialize();
+    _controller = controller;
   }
 
-  /// Get camera controller for UI preview
   @override
-  CameraController? getController() {
-    if (!_isInitialized) {
-      logger.warning(
-        '[CameraService] getController called but camera not initialized',
-      );
-      return null;
-    }
-    return _controller;
-  }
+  CameraController? getController() => _controller;
 
-  /// Check if camera is initialized
   @override
-  bool isInitialized() => _isInitialized;
+  bool isInitialized() => _controller?.value.isInitialized ?? false;
 
-  /// Take picture dan SIMPAN ke persistent storage dengan path yang valid
-  ///
-  /// Flow:
-  /// 1. takePicture() dari camera → XFile (temporary)
-  /// 2. Buat target directory: /app/documents/tracking_photos/
-  /// 3. Generate filename: {timestamp}.jpg
-  /// 4. Copy XFile ke target path
-  /// 5. Return persistent path & verify file exists
-  ///
-  /// Returns: Persistent file path yang GUARANTEED ada di device storage
   @override
   Future<String> takePicture() async {
+    await init();
+
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) {
+      throw CameraFailure('Camera not initialized');
+    }
+
     try {
-      if (!_isInitialized || _controller == null) {
-        logger.error('[CameraService] Camera not initialized for capture');
-        throw CameraFailure('Camera not initialized. Call init() first.');
-      }
-
       logger.log('[CameraService] Taking picture...');
-
-      // Step 1: Capture foto (returns XFile with temp path)
-      final xfile = await _controller!.takePicture();
-      logger.log('[CameraService] Picture captured (temp): ${xfile.path}');
-
-      // Step 2: Get atau create tracking_photos directory
-      final photoDirectory = await _getOrCreatePhotoDirectory();
-      logger.log('[CameraService] Photo directory: ${photoDirectory.path}');
-
-      // Step 3: Generate persistent filename dengan timestamp
-      final fileName = _generatePhotoFileName();
-      final persistentPath = '${photoDirectory.path}/$fileName';
-      logger.log('[CameraService] Target persistent path: $persistentPath');
-
-      // Step 4: Copy file dari temp ke persistent location menggunakan File
-      final tempFile = File(xfile.path);
-      final persistentFile = File(persistentPath);
-      await tempFile.copy(persistentPath);
-
-      logger.log('[CameraService] File copied successfully: $persistentPath');
-
-      // Step 5: Verify file exists
-      final fileExists = await File(persistentPath).exists();
-      if (!fileExists) {
-        logger.error('[CameraService] File save verification failed!');
-        throw CameraFailure('Photo save verification failed - file not found');
-      }
-
-      logger.log(
-        '[CameraService] ✅ Photo persisted and verified at: $persistentPath',
-      );
-      return persistentPath;
+      final image = await controller.takePicture();
+      return image.path;
     } on CameraException catch (e) {
-      logger.error(
-        '[CameraService] Camera exception during capture: ${e.code}',
-        e,
-      );
+      logger.error('[CameraService] Camera exception: ${e.code} - ${e.description}', e);
       throw _mapCameraException(e);
     } catch (e) {
-      logger.error('[CameraService] Unexpected error during capture', e);
-      throw CameraFailure('Failed to capture and save image: $e');
+      logger.error('[CameraService] Unexpected camera error', e);
+      throw CameraFailure('Unexpected camera error: $e');
     }
   }
 
-  /// Get atau create folder untuk tracking photos
-  /// Path: /app/documents/tracking_photos/
-  ///
-  /// Jika folder belum ada, dibuat otomatis
-  Future<Directory> _getOrCreatePhotoDirectory() async {
-    try {
-      // Get app documents directory
-      final appDocDir = await getApplicationDocumentsDirectory();
-      logger.log('[CameraService] App docs directory: ${appDocDir.path}');
-
-      // Create tracking_photos subdirectory
-      final photoDir = Directory('${appDocDir.path}/$_photoDirName');
-
-      // Check if directory exists, if not create it
-      if (!await photoDir.exists()) {
-        logger.log(
-          '[CameraService] Creating photo directory: ${photoDir.path}',
-        );
-        await photoDir.create(recursive: true);
-        logger.log('[CameraService] Photo directory created');
-      }
-
-      return photoDir;
-    } catch (e) {
-      logger.error('[CameraService] Failed to get/create photo directory', e);
-      throw CameraFailure('Cannot access storage: $e');
+  @override
+  Future<void> dispose() async {
+    if (_controller != null) {
+      await _controller!.dispose();
+      _controller = null;
     }
   }
 
-  /// Generate unique filename untuk foto baru
-  /// Format: {timestamp_milliseconds}.jpg
-  ///
-  /// Contoh: 1714461234567.jpg
-  String _generatePhotoFileName() {
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    return '$timestamp.jpg';
-  }
-
-  /// Map camera plugin exceptions to domain failures
   CameraFailure _mapCameraException(CameraException e) {
     switch (e.code) {
       case 'CameraAccessDenied':
@@ -213,14 +120,5 @@ class RealCameraService implements CameraService {
         return CameraFailure('Camera error: ${e.description ?? e.code}');
     }
   }
-
-  /// Dispose resources
-  @override
-  Future<void> dispose() async {
-    if (_controller != null) {
-      await _controller!.dispose();
-      _controller = null;
-      _isInitialized = false;
-    }
-  }
 }
+
