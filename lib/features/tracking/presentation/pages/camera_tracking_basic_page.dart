@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 /// - Initialize back camera in initState
 /// - Render CameraPreview only after controller Future completes (FutureBuilder)
 /// - Dispose CameraController correctly
-/// - Full screen dark background + CameraPreview
+/// - Full screen dark background + CameraPreview with correct aspect ratio
 class CameraTrackingPage extends StatefulWidget {
   const CameraTrackingPage({super.key});
 
@@ -28,6 +28,11 @@ class _CameraTrackingPageState extends State<CameraTrackingPage> {
   Future<void> _initCamera() async {
     final cameras = await availableCameras();
 
+    if (cameras.isEmpty) {
+      throw CameraException('NoCamera', 'No camera devices found');
+    }
+
+    // Pilih kamera belakang sebagai default.
     final backCamera = cameras.firstWhere(
       (c) => c.lensDirection == CameraLensDirection.back,
       orElse: () => cameras.first,
@@ -49,6 +54,53 @@ class _CameraTrackingPageState extends State<CameraTrackingPage> {
     super.dispose();
   }
 
+  /// Membangun preview kamera dengan rasio yang benar.
+  ///
+  /// Menggunakan Transform.scale untuk mengatasi perbedaan
+  /// antara rasio layar (deviceAspect) dan rasio kamera (cameraAspect),
+  /// sehingga preview tidak tampak 1:1 atau melebar aneh.
+  Widget _buildCameraPreview(BuildContext context) {
+    final controller = _controller;
+
+    if (controller == null || !controller.value.isInitialized) {
+      return const Center(
+        child: CircularProgressIndicator.adaptive(
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+        ),
+      );
+    }
+
+    final size = MediaQuery.of(context).size;
+    final cameraValue = controller.value;
+
+    // Rasio layar (portrait): width / height.
+    final deviceAspect = size.width / size.height;
+
+    // Rasio kamera dari plugin (biasanya landscape).
+    final cameraAspect =
+        (cameraValue.aspectRatio > 0) ? cameraValue.aspectRatio : deviceAspect;
+
+    // Hitung scale agar konten tidak distorsi tapi tetap mengisi area.
+    // Referensi pola komunitas: Transform.scale dengan deviceAspect vs cameraAspect.
+    // scale > 1 artinya sedikit "zoom in" agar tidak ada letterbox.
+    var scale = deviceAspect / cameraAspect;
+    if (scale < 1) {
+      // Pastikan tidak mengecil; jika < 1, balik agar tetap cover.
+      scale = 1 / scale;
+    }
+
+    return Transform.scale(
+      scale: scale,
+      alignment: Alignment.center,
+      child: Center(
+        child: AspectRatio(
+          aspectRatio: cameraAspect,
+          child: CameraPreview(controller),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -64,7 +116,9 @@ class _CameraTrackingPageState extends State<CameraTrackingPage> {
             );
           }
 
-          if (snapshot.hasError || _controller == null || !_controller!.value.isInitialized) {
+          if (snapshot.hasError ||
+              _controller == null ||
+              !_controller!.value.isInitialized) {
             return const Center(
               child: Text(
                 'Failed to initialize camera',
@@ -74,21 +128,10 @@ class _CameraTrackingPageState extends State<CameraTrackingPage> {
             );
           }
 
-          final controller = _controller!;
-
-          // Preserve aspect ratio to avoid stretched preview.
-          return Center(
-            child: AspectRatio(
-              aspectRatio: controller.value.aspectRatio,
-              child: Transform.scale(
-                scale: 1.0,
-                child: CameraPreview(controller),
-              ),
-            ),
-          );
+          // Preview kamera dengan rasio yang dijaga agar tidak stretch.
+          return _buildCameraPreview(context);
         },
       ),
     );
   }
 }
-

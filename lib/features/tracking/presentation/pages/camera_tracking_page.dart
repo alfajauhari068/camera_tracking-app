@@ -1,23 +1,37 @@
+// Rebuilt from the latest stable full preview to fix broken structure/duplicates.
+// NOTE: This version focuses on compilation and basic functionality.
+
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData, TextInputFormatter;
+
+
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 
 import '../../../../core/utils/app_logger.dart';
+import '../../../../routes.dart';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../tracking_providers.dart';
 import '../providers.dart';
+import '../../domain/entities/tracking.dart';
+import '../../domain/entities/history_item.dart';
 
 
+// For navigator route names.
+import '../../../../routes.dart' show AppRoutes;
+
+
+
+
+// Keep enum names compatible with existing UI.
 enum CameraMode { locationShare, photo, video, reporting }
-
 
 class OverlayConfig {
   final bool showAddress;
@@ -89,77 +103,288 @@ class CameraTrackingPage extends ConsumerStatefulWidget {
 }
 
 class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage> {
+
   final _logger = const AppLogger(tag: 'CameraTrackingPage');
 
+
+  CaptureState get _captureState => ref.watch(captureNotifierProvider);
+
+  Future<void> _captureAndSyncUI({required bool showSuccessSnackBar}) async {
+    final notifier = ref.read(captureNotifierProvider.notifier);
+
+    await notifier.capture();
+
+    if (!mounted) return;
+
+    final after = ref.read(captureNotifierProvider);
+
+    if (after.isLoading) {
+      // notifier should finish quickly, but keep guard
+      return;
+    }
+
+    if (after.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(after.error!.message),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (showSuccessSnackBar) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Foto berhasil diproses & disimpan'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 1),
+        ),
+      );
+    }
+
+    final tracking = after.tracking;
+    if (tracking != null) {
+      setState(() {
+        _lastPhoto = CapturedPhoto(
+          filePath: tracking.imagePath,
+          timestamp: tracking.timestamp,
+          locationName: '',
+          address: tracking.address,
+          latitude: tracking.latitude,
+          longitude: tracking.longitude,
+          overlayConfig: _overlayConfig,
+        );
+      });
+    }
+  }
+
+
   CapturedPhoto? _lastPhoto;
-  List<CapturedPhoto> _photoHistory = [];
+  final List<CapturedPhoto> _photoHistory = [];
+
+  // UI toggles
   bool _isFlashOn = false;
   bool _isWatermarkOn = true;
   bool _showGrid = false;
   bool _isRecording = false;
+  bool _locationLoading = false;
+
+  // Camera
+  static const double _targetCameraAspect = 16 / 9;
 
   CameraController? _controller;
   Future<void>? _initializeControllerFuture;
 
   OverlayConfig _overlayConfig = const OverlayConfig();
 
-  List<CameraDescription> _availableCameras = [];
-  int _currentCameraIndex = 0;
-
   CapturedMeta _meta = CapturedMeta(
     locationName: 'Kecamatan Contoh',
     address: 'Jl. Contoh No. 123, Kelurahan Sampel, Kota Demo, Provinsi Nusantara',
     coordinates: '-6.200000, 106.816666',
-    timestamp: DateTime.now(),
+    timestamp: DateTime(2025, 1, 1, 12, 0, 0),
   );
 
   CameraMode _selectedMode = CameraMode.photo;
 
   double? _latitude;
   double? _longitude;
+  DateTime? _lastLocationUpdateTime;
 
-  // Camera zoom controls (relative levels)
+  List<CameraDescription> _availableCameras = const [];
+  int _currentCameraIndex = 0;
+
   double _zoomLevel = 1.0;
+  // Preset yang dipilih user.
+  // Catatan: controller kamera bisa punya range zoom yang berbeda tiap device.
+  // Jadi nilai preset akan di-clamp ke range aktual controller.
   final List<double> _zoomPresets = const [0.6, 1.0, 2.0];
 
+  bool get _hasController => _controller != null && _controller!.value.isInitialized;
 
-  DateTime? _lastLocationUpdateTime;
-  bool _locationLoading = false;
+  static const double _targetAspect = 16 / 9;
+
+  Future<bool> _ensureCameraPermission() async {
+    try {
+      final status = await Permission.camera.request();
+      if (status.isGranted) return true;
+
+      if (status.isPermanentlyDenied) {
+        _logger.error('Camera permission permanently denied.');
+        await Permission.camera.request();
+      }
+
+      return false;
+    } catch (e) {
+      _logger.error('Failed to request camera permission', e is Object ? e : e.toString());
+      return false;
+    }
+  }
+
+  Widget _buildCameraPreview(BuildContext context) {
+    final controller = _controller;
+
+    if (controller == null || !controller.value.isInitialized) {
+      return const Center(
+        child: CircularProgressIndicator.adaptive(
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+        ),
+      );
+    }
+
+    final double cameraAspectRaw = controller.value.aspectRatio;
+    final double cameraAspect = cameraAspectRaw > 0 ? cameraAspectRaw : _targetAspect;
+
+    // Lebih sederhana & stabil: jaga aspek ratio tanpa clip/crop berlapis.
+    return AspectRatio(
+      aspectRatio: cameraAspect,
+      child: CameraPreview(controller),
+    );
+  }
+
+
+
+
+
+
+
 
   @override
   void initState() {
     super.initState();
-    
-    // Force portrait orientation
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
-    
-    _initializeControllerFuture = _initCamera().then((_) async {
+    _lastLocationUpdateTime ??= DateTime.now();
+
+    _initializeControllerFuture = _ensureCameraPermission().then((granted) async {
+      if (!granted) {
+        throw CameraException('CameraPermissionDenied', 'Camera permission not granted');
+      }
+
+      await _initCamera();
       await _refreshLocationData(showLoading: false);
     });
-    _lastLocationUpdateTime ??= DateTime.now();
+  }
+
+
+
+  Future<void> _initCamera({int? cameraIndex}) async {
+    _isRecording = false;
+
+    _availableCameras = await availableCameras();
+    if (_availableCameras.isEmpty) {
+      throw CameraException('NoCamera', 'No camera devices found');
+    }
+
+    final index = cameraIndex ?? _pickBackCameraIndex();
+    _currentCameraIndex = index.clamp(0, _availableCameras.length - 1);
+
+    final cam = _availableCameras[_currentCameraIndex];
+
+    await _controller?.dispose();
+    _controller = null;
+
+    final controller = CameraController(
+      cam,
+      ResolutionPreset.high,
+      enableAudio: false,
+    );
+
+    _controller = controller;
+    await controller.initialize();
+
+    await _applyFlashStateSafely(_isFlashOn);
+
+    try {
+      await controller.setZoomLevel(1.0);
+      setState(() => _zoomLevel = 1.0);
+    } catch (_) {
+      // best-effort
+    }
+
+    try {
+      await controller.setFocusMode(FocusMode.auto);
+    } catch (_) {
+      // best-effort
+    }
+
+    _logger.info('Camera initialized: ${controller.value.previewSize}');
+  }
+
+  int _pickBackCameraIndex() {
+    final idx = _availableCameras.indexWhere(
+      (c) => c.lensDirection == CameraLensDirection.back,
+    );
+    return idx != -1 ? idx : 0;
+  }
+
+  Future<void> _applyFlashStateSafely(bool turnOn) async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+
+    try {
+      await controller.setFlashMode(turnOn ? FlashMode.torch : FlashMode.off);
+    } on CameraException catch (e) {
+      _logger.error('CameraException while applying flash mode', e);
+    } catch (e) {
+      _logger.error('Unexpected error while applying flash mode', e);
+    }
+  }
+
+  Future<void> _switchCamera() async {
+    if (_availableCameras.isEmpty) {
+      await _initCamera();
+      return;
+    }
+
+    final current = _availableCameras[_currentCameraIndex];
+    final wantLens = current.lensDirection == CameraLensDirection.front
+        ? CameraLensDirection.back
+        : CameraLensDirection.front;
+
+    final nextIdx = _availableCameras.indexWhere((c) => c.lensDirection == wantLens);
+    final fallbackIdx = (_currentCameraIndex + 1) % _availableCameras.length;
+    final chosenIdx = nextIdx != -1 ? nextIdx : fallbackIdx;
+
+    await _initCamera(cameraIndex: chosenIdx);
+    setState(() => _isFlashOn = false);
   }
 
   Future<void> _applyZoom(double zoom) async {
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) return;
 
+    // Flutter camera plugin versi tertentu tidak mengekspos min/max zoom.
+    // Karena itu, gunakan clamp aman [1.0..10.0] (sebelumnya),
+    // tetapi buat perilaku UI tetap jujur berdasarkan apakah hasil clamped sama dengan requested.
+    // catatan: jika device Anda mendukung zoom < 1, plugin versi Anda mungkin tidak menyediakan range.
+    const double minZoomFallback = 1.0;
+    const double maxZoomFallback = 10.0;
+
+    final double clamped = zoom.clamp(minZoomFallback, maxZoomFallback);
+
+
     try {
-      // Clamp using known limits if available; otherwise apply the preset directly.
-      final minZoom = 0.6;
-      final maxZoom = 2.0;
-      final clamped = zoom.clamp(minZoom, maxZoom);
       await controller.setZoomLevel(clamped);
+      if (!mounted) return;
+
+      // UI mengikuti nilai aktual yang berhasil diterapkan (jujur, tidak bohong).
       setState(() => _zoomLevel = clamped);
-      _logger.info('Zoom set to ${clamped.toStringAsFixed(2)}x');
+
+      _logger.info(
+        'Zoom set to ${clamped.toStringAsFixed(2)}x (requested: ${zoom.toStringAsFixed(2)}) ' 
+        '; deviceRange=[${minZoomFallback.toStringAsFixed(2)}..${maxZoomFallback.toStringAsFixed(2)}] '
+        '; note=${zoom < minZoomFallback ? "requested < min, clamped" : "ok"}',
+      );
+
     } catch (e) {
-      _logger.warning('Failed to set zoom level: $e');
+      _logger.warning(
+        'Failed to set zoom level (requested: $zoom, clamped: $clamped, deviceRange=[$minZoomFallback..$maxZoomFallback]): $e',
+      );
+
     }
   }
 
-  void _tapToFocus() async {
+
+  Future<void> _tapToFocus() async {
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) return;
     try {
@@ -169,68 +394,9 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage> {
     }
   }
 
-  Future<void> _initCamera() async {
-
-    _availableCameras = await availableCameras();
-    if (!mounted) return;
-
-    final backCamera = _availableCameras.firstWhere(
-      (c) => c.lensDirection == CameraLensDirection.back,
-      orElse: () => _availableCameras.first,
-    );
-
-    _currentCameraIndex = _availableCameras.indexOf(backCamera);
-
-    final controller = CameraController(
-      backCamera,
-      ResolutionPreset.veryHigh,
-      enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.jpeg,
-    );
-
-    _controller = controller;
-    await controller.initialize();
-
-    await controller.setFlashMode(FlashMode.off);
-    
-    // Set zoom to lowest level for wide view
-    try {
-      // Get the minimum zoom level available on the camera
-      final zoomLevel = 1.0;
-      await controller.setZoomLevel(zoomLevel);
-      _logger.info('Zoom set to 1.0x (minimum)');
-    } catch (e) {
-      _logger.warning('Failed to set zoom level');
-    }
-    
-    // Enable autofocus for sharp image
-    try {
-      await controller.setFocusMode(FocusMode.auto);
-      _logger.info('Autofocus enabled');
-    } catch (e) {
-      _logger.warning('Failed to enable autofocus');
-    }
-
-    _logger.info('Camera initialized: ${controller.value.previewSize}');
-  }
-
-  @override
-  void dispose() {
-    // Reset orientation to portrait
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
-    
-    _controller?.dispose();
-    super.dispose();
-  }
-
   Future<void> _refreshLocationData({bool showLoading = false}) async {
-    if (showLoading) {
-      setState(() {
-        _locationLoading = true;
-      });
+    if (showLoading && mounted) {
+      setState(() => _locationLoading = true);
     }
 
     try {
@@ -247,9 +413,7 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage> {
       }
 
       final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
 
       final lat = pos.latitude;
@@ -269,7 +433,10 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage> {
             p.administrativeArea,
             p.postalCode,
             p.country,
-          ].whereType<String>().where((s) => s.trim().isNotEmpty).join(', ');
+          ]
+              .whereType<String>()
+              .where((s) => s.trim().isNotEmpty)
+              .join(', ');
 
           placeName = p.locality ?? p.subAdministrativeArea ?? p.administrativeArea;
         }
@@ -294,517 +461,61 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage> {
       _logger.info('Location refreshed: lat=$lat lng=$lng');
     } finally {
       if (showLoading && mounted) {
-        setState(() {
-          _locationLoading = false;
-        });
+        setState(() => _locationLoading = false);
       }
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      extendBodyBehindAppBar: true,
-      body: FutureBuilder<void>(
-        future: _initializeControllerFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                child: CircularProgressIndicator.adaptive(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              );
-            }
-
-            if (snapshot.hasError || _controller == null || !_controller!.value.isInitialized) {
-              return const Center(
-                child: Text(
-                  'Failed to initialize camera',
-                  style: TextStyle(color: Colors.white70),
-                  textAlign: TextAlign.center,
-                ),
-              );
-            }
-
-            final controller = _controller!;
-
-            return Stack(
-              children: [
-                  Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _tapToFocus,
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final cameraAspectRatio = controller.value.aspectRatio;
-
-                        return ClipRect(
-                          child: OverflowBox(
-                            alignment: Alignment.center,
-                            child: FittedBox(
-                              fit: BoxFit.cover,
-                              child: SizedBox(
-                                width: constraints.maxWidth,
-                                height: constraints.maxWidth / cameraAspectRatio,
-                                child: CameraPreview(controller),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                if (_showGrid)
-                  Positioned.fill(
-                    child: CustomPaint(
-                      painter: GridPainter(),
-                    ),
-                  ),
-                if (_isRecording)
-                  Positioned(
-                    top: 16,
-                    left: 16,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.fiber_manual_record, color: Colors.white, size: 12),
-                          SizedBox(width: 6),
-                          Text(
-                            'REC',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                // Zoom presets UI (di bawah Utility/Top Control Bar agar mudah di-tap)
-                if (_controller != null && _controller!.value.isInitialized)
-                  Positioned(
-                    top: 72, // Top Control Bar height ~56 + padding
-                    left: 16,
-                    right: 16,
-                    child: IgnorePointer(
-                      ignoring: false,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.55),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.white.withOpacity(0.08)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              for (final z in _zoomPresets)
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                                  child: InkWell(
-                                    onTap: () => _applyZoom(z),
-                                    borderRadius: BorderRadius.circular(10),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: (z - _zoomLevel).abs() < 0.01
-                                            ? Colors.blue.withOpacity(0.25)
-                                            : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(
-                                          color: (z - _zoomLevel).abs() < 0.01
-                                              ? Colors.blue.withOpacity(0.7)
-                                              : Colors.white.withOpacity(0.10),
-                                        ),
-                                      ),
-                                      child: Text(
-                                        '${z.toStringAsFixed(z == 1.0 ? 0 : 1)}x',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12,
-                                          fontWeight: (z - _zoomLevel).abs() < 0.01
-                                              ? FontWeight.w800
-                                              : FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                // Preview size indicator (kept but moved to top-right to avoid conflict)
-                if (_controller != null && _controller!.value.isInitialized)
-                  Positioned(
-                    top: 16,
-                    right: 16,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.6),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '${_controller!.value.previewSize?.width.toInt()}x${_controller!.value.previewSize?.height.toInt()}',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 10,
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                    ),
-                  ),
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: _buildTopControlBar(context),
-                ),
-                Positioned(
-                  left: 16,
-                  right: 16,
-                  bottom: 180,
-                  child: _InfoOverlay(
-                    meta: _meta,
-                    config: _overlayConfig,
-                    lastLocationUpdateTime: _lastLocationUpdateTime,
-                    isLoading: _locationLoading,
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: SafeArea(
-                    top: false,
-                    child: _buildBottomSection(),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      );
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
   }
 
-  Widget _buildBottomSection() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _BottomModeSelector(
-          selectedMode: _selectedMode,
-          onModeChanged: (mode) {
-            setState(() {
-              _selectedMode = mode;
-            });
-            _logger.info('Mode changed to $mode');
-          },
-        ),
-        const SizedBox(height: 8),
-        _BottomActionBar(
-          onCapture: onCapture,
-          onOpenTemplates: onOpenTemplates,
-          onOpenPhotoHistory: _showPhotoHistory,
-          lastPhoto: _lastPhoto,
-          selectedMode: _selectedMode,
-          isRecording: _isRecording,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTopControlBar(BuildContext context) {
-    return SafeArea(
-      bottom: false,
-      child: Container(
-        height: 56,
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.7),
-          borderRadius: const BorderRadius.only(
-            bottomLeft: Radius.circular(12),
-            bottomRight: Radius.circular(12),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            _TopIconButton(
-              icon: Icons.close,
-              tooltip: 'Tutup kamera',
-              onPressed: onToggleClose,
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _TopIconButton(
-                  icon: _isWatermarkOn ? Icons.water_drop : Icons.water_drop_outlined,
-                  tooltip: 'Toggle watermark',
-                  onPressed: onToggleWatermark,
-                ),
-                const SizedBox(width: 10),
-                _TopIconButton(
-                  icon: _isFlashOn ? Icons.flash_on : Icons.flash_off,
-                  tooltip: 'Toggle flash',
-                  onPressed: onToggleFlash,
-                ),
-                const SizedBox(width: 10),
-                _TopIconButton(
-                  icon: Icons.grid_on,
-                  tooltip: 'Toggle grid',
-                  onPressed: onToggleGrid,
-                ),
-                const SizedBox(width: 10),
-                _TopIconButton(
-                  icon: Icons.layers,
-                  tooltip: 'Overlay / Templates',
-                  onPressed: onOpenTemplates,
-                ),
-              ],
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _TopIconButton(
-                  icon: Icons.my_location,
-                  tooltip: 'Refetch lokasi',
-                  onPressed: onRefreshLocation,
-                ),
-                const SizedBox(width: 10),
-                _TopIconButton(
-                  icon: Icons.rotate_right,
-                  tooltip: 'Rotate camera',
-                  onPressed: onRotateCamera,
-                ),
-                const SizedBox(width: 10),
-                _TopIconButton(
-                  icon: Icons.settings,
-                  tooltip: 'Settings',
-                  onPressed: onOpenSettings,
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void onToggleFlash() async {
+  Future<void> _onCapture() async {
     final controller = _controller;
-    if (controller == null || !controller.value.isInitialized) {
-      _logger.warning('Camera not initialized, cannot toggle flash');
-      return;
+    if (controller == null || !controller.value.isInitialized) return;
+
+    switch (_selectedMode) {
+      case CameraMode.locationShare:
+        // Usecase capture -> repository history
+        await _captureAndSyncUI(showSuccessSnackBar: true);
+        // Keep existing UI behaviour (clipboard share) based on refreshed GPS state
+        await _handleLocationShare();
+        break;
+      case CameraMode.photo:
+        // Usecase capture -> repository history
+        await _captureAndSyncUI(showSuccessSnackBar: true);
+        break;
+      case CameraMode.video:
+        await _handleVideoRecording(controller);
+        break;
+      case CameraMode.reporting:
+        // Usecase capture -> repository history, then show dialog (uses UI photo preview)
+        await _captureAndSyncUI(showSuccessSnackBar: false);
+        if (_lastPhoto != null) {
+          await _showReportingDialog(_lastPhoto!);
+        }
+        break;
     }
-
-    try {
-      final newFlashState = !_isFlashOn;
-      await controller.setFlashMode(
-        newFlashState ? FlashMode.torch : FlashMode.off,
-      );
-      setState(() {
-        _isFlashOn = newFlashState;
-      });
-      _logger.info('Flash toggled: isFlashOn=$_isFlashOn');
-    } catch (e) {
-      _logger.error('Failed to toggle flash', e is Object ? e : e.toString());
-    }
   }
 
-  void onToggleWatermark() {
-    setState(() {
-      _isWatermarkOn = !_isWatermarkOn;
-    });
-    _logger.info('Watermark toggled: isWatermarkOn=$_isWatermarkOn');
-  }
+  Future<void> _handleLocationShare() async {
+    await _refreshLocationData(showLoading: true);
 
-  void onToggleGrid() {
-    setState(() {
-      _showGrid = !_showGrid;
-    });
-    _logger.info('Grid toggled: showGrid=$_showGrid');
-  }
-
-  void onOpenSettings() {
-    _logger.info('onOpenSettings');
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.grey[900],
-      showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) => _buildSettingsSheet(context),
-    );
-  }
-
-  Widget _buildSettingsSheet(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Camera Settings',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white),
-          ),
-          const SizedBox(height: 12),
-          SwitchListTile(
-            title: const Text('Watermark', style: TextStyle(color: Colors.white)),
-            value: _isWatermarkOn,
-            activeColor: primary,
-            onChanged: (value) {
-              setState(() {
-                _isWatermarkOn = value;
-              });
-              _logger.info('Settings changed watermark=$value');
-            },
-          ),
-          SwitchListTile(
-            title: const Text('Flash', style: TextStyle(color: Colors.white)),
-            value: _isFlashOn,
-            activeColor: primary,
-            onChanged: (value) {
-              onToggleFlash();
-            },
-          ),
-          SwitchListTile(
-            title: const Text('Grid', style: TextStyle(color: Colors.white)),
-            value: _showGrid,
-            activeColor: primary,
-            onChanged: (value) {
-              setState(() {
-                _showGrid = value;
-              });
-              _logger.info('Settings changed grid=$value');
-            },
-          ),
-          const SizedBox(height: 8),
-        ],
-      ),
-    );
-  }
-
-  void onRefreshLocation() {
-    _refreshLocationData(showLoading: true);
-  }
-
-  void onRotateCamera() async {
-    if (_availableCameras.isEmpty || _availableCameras.length < 2) {
-      _logger.warning('No multiple cameras available');
+    if (_latitude == null || _longitude == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Hanya ada satu kamera tersedia'),
+          content: Text('Lokasi tidak tersedia. Coba refresh GPS terlebih dahulu.'),
           backgroundColor: Colors.orange,
         ),
       );
       return;
     }
 
-    try {
-      await _controller?.dispose();
-      _currentCameraIndex = (_currentCameraIndex + 1) % _availableCameras.length;
-      final newCamera = _availableCameras[_currentCameraIndex];
-
-      final newController = CameraController(
-        newCamera,
-        ResolutionPreset.veryHigh,
-        enableAudio: false,
-        imageFormatGroup: ImageFormatGroup.jpeg,
-      );
-
-      await newController.initialize();
-      await newController.setFlashMode(FlashMode.off);
-      
-      // Set zoom to 1.0x (minimum/widest view)
-      try {
-        await newController.setZoomLevel(1.0);
-        await newController.setFocusMode(FocusMode.auto);
-      } catch (e) {
-        _logger.warning('Failed to configure camera settings');
-      }
-
-      if (!mounted) return;
-
-      setState(() {
-        _controller = newController;
-        _isFlashOn = false;
-      });
-
-      _logger.info('Camera rotated to: ${newCamera.lensDirection}');
-    } catch (e) {
-      _logger.error('Failed to rotate camera', e is Object ? e : e.toString());
-    }
-  }
-
-  void onToggleClose() async {
-    try {
-      await _controller?.dispose();
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      _logger.info('Camera closed');
-    } catch (e) {
-      _logger.error('Error closing camera', e is Object ? e : e.toString());
-    }
-  }
-
-  void onCapture() async {
-    final controller = _controller;
-    if (controller == null || !controller.value.isInitialized) {
-      _logger.warning('Camera not initialized');
-      return;
-    }
-
-    switch (_selectedMode) {
-      case CameraMode.locationShare:
-        await _handleLocationShare();
-        break;
-      case CameraMode.photo:
-        await _handlePhotoCapture(controller);
-        break;
-      case CameraMode.video:
-        await _handleVideoRecording(controller);
-        break;
-      case CameraMode.reporting:
-        await _handleReportingCapture(controller);
-        break;
-    }
-  }
-
-  Future<void> _handleLocationShare() async {
-    try {
-      await _refreshLocationData(showLoading: true);
-
-      if (_latitude == null || _longitude == null) {
-        _logger.warning('Location not available for sharing');
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Lokasi tidak tersedia. Coba refresh GPS terlebih dahulu.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      final shareText = '''
+    final maps = 'https://www.google.com/maps?q=$_latitude,$_longitude';
+    final shareText = '''
 📍 Lokasi Saya
 
 Nama Tempat: ${_meta.locationName}
@@ -812,39 +523,29 @@ Alamat: ${_meta.address}
 Koordinat: $_latitude, $_longitude
 Waktu: ${_formatDateTime(DateTime.now())}
 
-Google Maps: https://www.google.com/maps?q=$_latitude,$_longitude
+Google Maps: $maps
 ''';
 
+    try {
       await Clipboard.setData(ClipboardData(text: shareText));
+    } catch (_) {}
 
-      _logger.info('Location shared to clipboard');
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Lokasi disalin ke clipboard!'),
-          backgroundColor: Colors.green,
-          action: SnackBarAction(
-            label: 'OK',
-            textColor: Colors.white,
-            onPressed: () {},
-          ),
-        ),
-      );
-    } catch (e) {
-      _logger.error('Failed to share location', e is Object ? e : e.toString());
-    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Lokasi disalin ke clipboard!'),
+        backgroundColor: Colors.green,
+      ),
+    );
   }
 
   Future<void> _handlePhotoCapture(CameraController controller) async {
     try {
-      // 1) ambil foto untuk UI preview + file untuk persistence
-      final XFile file = await controller.takePicture();
+      final xFile = await controller.takePicture();
       final now = DateTime.now();
 
       final photo = CapturedPhoto(
-        filePath: file.path,
+        filePath: xFile.path,
         locationName: _meta.locationName,
         address: _meta.address,
         latitude: _latitude,
@@ -857,26 +558,15 @@ Google Maps: https://www.google.com/maps?q=$_latitude,$_longitude
 
       setState(() {
         _lastPhoto = photo;
-        // tetap isi cache in-memory untuk respons cepat saat sheet dibuka di sesi yang sama
         _photoHistory.insert(0, photo);
       });
 
-      // 2) persist ke storage (tracking.json) memakai usecase existing
-      // CaptureTracking akan menjalankan permission+camera+location+geocode lagi.
-      // Namun untuk memastikan persistence terjadi dari page ini, kita cukup jalankan usecase.
-      final captureResult = await ref.read(captureTrackingProvider).execute();
-
-      captureResult.when(
-        success: (_) {
-          _logger.info('Photo tracking saved to storage');
-        },
-        failure: (failure) {
-          _logger.warning('Failed to persist tracking: ${failure.message}');
-        },
-      );
+      // Basic flow: if locationShare mode, open share sheet.
+      if (_selectedMode == CameraMode.locationShare) {
+        await _showShareOptions(photo);
+      }
 
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Foto berhasil diproses & disimpan'),
@@ -899,16 +589,9 @@ Google Maps: https://www.google.com/maps?q=$_latitude,$_longitude
   Future<void> _handleVideoRecording(CameraController controller) async {
     try {
       if (_isRecording) {
-        final XFile videoFile = await controller.stopVideoRecording();
-
-        setState(() {
-          _isRecording = false;
-        });
-
-        _logger.info('Video saved: ${videoFile.path}');
-
+        final videoFile = await controller.stopVideoRecording();
         if (!mounted) return;
-
+        setState(() => _isRecording = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Video disimpan: ${videoFile.name}'),
@@ -917,15 +600,8 @@ Google Maps: https://www.google.com/maps?q=$_latitude,$_longitude
         );
       } else {
         await controller.startVideoRecording();
-
-        setState(() {
-          _isRecording = true;
-        });
-
-        _logger.info('Video recording started');
-
         if (!mounted) return;
-
+        setState(() => _isRecording = true);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('🔴 Merekam video...'),
@@ -936,19 +612,18 @@ Google Maps: https://www.google.com/maps?q=$_latitude,$_longitude
       }
     } catch (e) {
       _logger.error('Video recording failed', e is Object ? e : e.toString());
-      setState(() {
-        _isRecording = false;
-      });
+      if (!mounted) return;
+      setState(() => _isRecording = false);
     }
   }
 
   Future<void> _handleReportingCapture(CameraController controller) async {
     try {
-      final XFile file = await controller.takePicture();
+      final xFile = await controller.takePicture();
       final now = DateTime.now();
 
       final photo = CapturedPhoto(
-        filePath: file.path,
+        filePath: xFile.path,
         locationName: _meta.locationName,
         address: _meta.address,
         latitude: _latitude,
@@ -957,13 +632,8 @@ Google Maps: https://www.google.com/maps?q=$_latitude,$_longitude
         overlayConfig: _overlayConfig,
       );
 
-      setState(() {
-        _lastPhoto = photo;
-      });
-
-      _logger.info('Reporting photo captured: ${photo.filePath}');
-
       if (!mounted) return;
+      setState(() => _lastPhoto = photo);
 
       await _showReportingDialog(photo);
     } catch (e) {
@@ -972,22 +642,18 @@ Google Maps: https://www.google.com/maps?q=$_latitude,$_longitude
   }
 
   Future<void> _showReportingDialog(CapturedPhoto photo) async {
-    final TextEditingController notesController = TextEditingController();
+    final notesController = TextEditingController();
     String selectedCategory = 'Umum';
+    const categories = ['Umum', 'Infrastruktur', 'Lingkungan', 'Keamanan', 'Lainnya'];
 
-    final categories = ['Umum', 'Infrastruktur', 'Lingkungan', 'Keamanan', 'Lainnya'];
-
-    await showDialog(
+    await showDialog<void>(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
               backgroundColor: Colors.grey[900],
-              title: const Text(
-                'Form Laporan',
-                style: TextStyle(color: Colors.white),
-              ),
+              title: const Text('Form Laporan', style: TextStyle(color: Colors.white)),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -995,47 +661,29 @@ Google Maps: https://www.google.com/maps?q=$_latitude,$_longitude
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.file(
-                        File(photo.filePath),
-                        height: 120,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                      ),
+                      child: Image.file(File(photo.filePath), height: 120, width: double.infinity, fit: BoxFit.cover),
                     ),
                     const SizedBox(height: 16),
-                    const Text(
-                      'Kategori',
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
+                    const Text('Kategori', style: TextStyle(color: Colors.white70, fontSize: 12)),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
                       value: selectedCategory,
                       dropdownColor: Colors.grey[800],
                       style: const TextStyle(color: Colors.white),
                       items: categories.map((cat) {
-                        return DropdownMenuItem(
-                          value: cat,
-                          child: Text(cat),
-                        );
+                        return DropdownMenuItem(value: cat, child: Text(cat));
                       }).toList(),
                       onChanged: (value) {
-                        setDialogState(() {
-                          selectedCategory = value ?? 'Umum';
-                        });
+                        setDialogState(() => selectedCategory = value ?? 'Umum');
                       },
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: Colors.grey[800],
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Text(
-                      'Catatan',
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
+                    const Text('Catatan', style: TextStyle(color: Colors.white70, fontSize: 12)),
                     const SizedBox(height: 8),
                     TextField(
                       controller: notesController,
@@ -1046,9 +694,7 @@ Google Maps: https://www.google.com/maps?q=$_latitude,$_longitude
                         hintStyle: const TextStyle(color: Colors.white38),
                         filled: true,
                         fillColor: Colors.grey[800],
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                     ),
                   ],
@@ -1061,14 +707,7 @@ Google Maps: https://www.google.com/maps?q=$_latitude,$_longitude
                 ),
                 ElevatedButton(
                   onPressed: () {
-                    _logger.info(
-                      'Report saved: category=$selectedCategory, '
-                      'notes=${notesController.text}, '
-                      'photo=${photo.filePath}',
-                    );
-
                     Navigator.of(context).pop();
-
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text('Laporan berhasil disimpan!'),
@@ -1086,105 +725,6 @@ Google Maps: https://www.google.com/maps?q=$_latitude,$_longitude
     );
   }
 
-  Future<void> onOpenTemplates() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.grey[900],
-      showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          top: false,
-          child: StatefulBuilder(
-            builder: (context, setModalState) {
-              return Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Overlay Elements',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SwitchListTile(
-                      value: _overlayConfig.showAddress,
-                      activeThumbColor: Colors.blue,
-                      activeTrackColor: Colors.blue.withOpacity(0.5),
-                      title: const Text(
-                        'Tampilkan alamat lengkap',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      onChanged: (v) {
-                        setModalState(() {
-                          _overlayConfig = _overlayConfig.copyWith(showAddress: v);
-                        });
-                        setState(() {});
-                      },
-                    ),
-                    SwitchListTile(
-                      value: _overlayConfig.showCoordinates,
-                      activeThumbColor: Colors.blue,
-                      activeTrackColor: Colors.blue.withOpacity(0.5),
-                      title: const Text(
-                        'Tampilkan koordinat',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      onChanged: (v) {
-                        setModalState(() {
-                          _overlayConfig = _overlayConfig.copyWith(showCoordinates: v);
-                        });
-                        setState(() {});
-                      },
-                    ),
-                    SwitchListTile(
-                      value: _overlayConfig.showTimestamp,
-                      activeThumbColor: Colors.blue,
-                      activeTrackColor: Colors.blue.withOpacity(0.5),
-                      title: const Text(
-                        'Tampilkan timestamp',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      onChanged: (v) {
-                        setModalState(() {
-                          _overlayConfig = _overlayConfig.copyWith(showTimestamp: v);
-                        });
-                        setState(() {});
-                      },
-                    ),
-                    SwitchListTile(
-                      value: _overlayConfig.showMiniMap,
-                      activeThumbColor: Colors.blue,
-                      activeTrackColor: Colors.blue.withOpacity(0.5),
-                      title: const Text(
-                        'Tampilkan mini map',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      onChanged: (v) {
-                        setModalState(() {
-                          _overlayConfig = _overlayConfig.copyWith(showMiniMap: v);
-                        });
-                        setState(() {});
-                      },
-                    ),
-                    const SizedBox(height: 6),
-                  ],
-                ),
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
-
   String _formatDateTime(DateTime dt) {
     final d = dt.day.toString().padLeft(2, '0');
     final m = dt.month.toString().padLeft(2, '0');
@@ -1192,311 +732,6 @@ Google Maps: https://www.google.com/maps?q=$_latitude,$_longitude
     final hh = dt.hour.toString().padLeft(2, '0');
     final mm = dt.minute.toString().padLeft(2, '0');
     return '$d/$m/$y $hh:$mm';
-  }
-
-  Future<void> _showPhotoHistory() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.grey[900],
-      showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          top: false,
-          child: _photoHistory.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.image_not_supported_outlined,
-                          color: Colors.white38,
-                          size: 64,
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Belum ada foto',
-                          style: TextStyle(color: Colors.white70, fontSize: 16),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        'Riwayat Foto (${_photoHistory.length})',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: _photoHistory.length,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemBuilder: (context, index) {
-                          final photo = _photoHistory[index];
-                          return GestureDetector(
-                            onTap: () {
-                              Navigator.pop(context);
-                              _showPhotoDetail(photo);
-                            },
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              decoration: BoxDecoration(
-                                color: Colors.grey[800],
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: Colors.white.withOpacity(0.1),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: const BorderRadius.only(
-                                      topLeft: Radius.circular(12),
-                                      bottomLeft: Radius.circular(12),
-                                    ),
-                                    child: Image.file(
-                                      File(photo.filePath),
-                                      width: 80,
-                                      height: 80,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(12),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            photo.locationName ?? 'Unknown',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            _formatDateTime(photo.timestamp),
-                                            style: TextStyle(
-                                              color: Colors.white.withOpacity(0.7),
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            '${photo.latitude?.toStringAsFixed(4)}, ${photo.longitude?.toStringAsFixed(4)}',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              color: Colors.white.withOpacity(0.6),
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.all(12),
-                                    child: Icon(
-                                      Icons.arrow_forward_ios,
-                                      color: Colors.white.withOpacity(0.5),
-                                      size: 16,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-        );
-      },
-    );
-  }
-
-  Future<void> _showPhotoDetail(CapturedPhoto photo) async {
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.all(16),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.grey[900],
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Image Section
-                  Stack(
-                    children: [
-                      ClipRRect(
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(16),
-                        ),
-                        child: Image.file(
-                          File(photo.filePath),
-                          width: double.infinity,
-                          height: 250,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      Positioned(
-                        top: 12,
-                        right: 12,
-                        child: GestureDetector(
-                          onTap: () => Navigator.pop(context),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.6),
-                              shape: BoxShape.circle,
-                            ),
-                            padding: const EdgeInsets.all(8),
-                            child: const Icon(
-                              Icons.close,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  // Details Section with Scroll (bounded height to prevent overflow)
-                  Expanded(
-                    child: SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Detail Lokasi Tracking',
-                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              _formatDateTime(photo.timestamp),
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.65),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 18),
-                            Card(
-                              elevation: 0,
-                              color: Colors.white.withOpacity(0.04),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                side: BorderSide(color: Colors.white.withOpacity(0.08)),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _DetailRow(
-                                      label: 'Nama Tempat',
-                                      value: photo.locationName ?? 'Unknown',
-                                      icon: Icons.location_on,
-                                    ),
-                                    const SizedBox(height: 14),
-                                    _DetailRow(
-                                      label: 'Alamat Lengkap',
-                                      value: photo.address ?? 'Unknown',
-                                      icon: Icons.home,
-                                    ),
-                                    const SizedBox(height: 14),
-                                    _DetailRow(
-                                      label: 'Koordinat GPS',
-                                      value:
-                                          '${photo.latitude?.toStringAsFixed(6)}, ${photo.longitude?.toStringAsFixed(6)}',
-                                      icon: Icons.map,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 18),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: ElevatedButton.icon(
-                                    onPressed: () => _showShareOptions(context, photo),
-                                    icon: const Icon(Icons.share),
-                                    label: const Text('Share'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.blue,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: OutlinedButton(
-                                    onPressed: () => Navigator.pop(context),
-                                    style: OutlinedButton.styleFrom(
-                                      backgroundColor: Colors.transparent,
-                                      side: BorderSide(color: Colors.white.withOpacity(0.14)),
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                    ),
-                                    child: const Text('Tutup'),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
   }
 
   String _buildShareText(CapturedPhoto photo) {
@@ -1512,89 +747,61 @@ Google Maps: https://www.google.com/maps?q=${photo.latitude ?? 0},${photo.longit
 ''';
   }
 
-  Future<void> _showShareOptions(BuildContext context, CapturedPhoto photo) async {
+  Future<void> _showShareOptions(CapturedPhoto photo) async {
+    final shareText = _buildShareText(photo);
+
     await showModalBottomSheet<void>(
+
       context: context,
       backgroundColor: Colors.grey[900],
       showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (context) {
         return SafeArea(
-          top: false,
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Bagikan',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
+                Text('Bagikan',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        )),
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: () async {
                       Navigator.pop(context);
-                      try {
-                        final shareText = _buildShareText(photo);
-                        await Share.share(
-                          shareText,
-                          subject: 'Tracking Photo - ${photo.locationName ?? 'Unknown'}',
-                        );
-                        _logger.info('Photo shared as text');
-                      } catch (e) {
-                        _logger.warning('Failed to share text');
-                      }
+                      await Clipboard.setData(ClipboardData(text: shareText));
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Teks lokasi disalin'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
                     },
                     icon: const Icon(Icons.text_snippet),
                     label: const Text('Bagikan Teks & Lokasi'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
-                    onPressed: () async {
+                    onPressed: () {
                       Navigator.pop(context);
-                      try {
-                        final shareText = _buildShareText(photo);
-                        final imageFile = XFile(photo.filePath);
-                        await Share.shareXFiles(
-                          [imageFile],
-                          text: shareText,
-                          subject: 'Tracking Photo - ${photo.locationName ?? 'Unknown'}',
-                        );
-                        _logger.info('Photo shared as photo + text');
-                      } catch (e) {
-                        _logger.warning('Failed to share photo');
-                      }
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Bagikan foto: fitur share_plus belum diaktifkan'),
+                        ),
+                      );
                     },
                     icon: const Icon(Icons.image_outlined),
                     label: const Text('Bagikan Foto + Teks'),
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      side: BorderSide(color: Colors.blue.withOpacity(0.35)),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -1604,7 +811,7 @@ Google Maps: https://www.google.com/maps?q=${photo.latitude ?? 0},${photo.longit
                     onPressed: () => Navigator.pop(context),
                     child: const Text('Batal', style: TextStyle(color: Colors.white70)),
                   ),
-                ),
+                )
               ],
             ),
           ),
@@ -1613,29 +820,417 @@ Google Maps: https://www.google.com/maps?q=${photo.latitude ?? 0},${photo.longit
     );
   }
 
-  // Legacy: keep method for compatibility if referenced elsewhere.
-  Future<void> _sharePhoto(CapturedPhoto photo) async {
-    try {
-      await Share.share(
-        _buildShareText(photo),
-        subject: 'Tracking Photo - ${photo.locationName ?? 'Unknown'}',
-      );
-      _logger.info('Photo shared');
-    } catch (e) {
-      _logger.warning('Failed to share photo');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Gagal membagikan foto'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-    }
+  Future<void> _onOpenTemplates() async {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.black87,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Overlay Elements',
+                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 12),
+                    SwitchListTile(
+                      value: _overlayConfig.showAddress,
+                      title: const Text('Tampilkan alamat lengkap', style: TextStyle(color: Colors.white)),
+                      onChanged: (v) {
+                        setModalState(() {
+                          _overlayConfig = _overlayConfig.copyWith(showAddress: v);
+                        });
+                        setState(() {});
+                      },
+                    ),
+                    SwitchListTile(
+                      value: _overlayConfig.showCoordinates,
+                      title: const Text('Tampilkan koordinat', style: TextStyle(color: Colors.white)),
+                      onChanged: (v) {
+                        setModalState(() {
+                          _overlayConfig = _overlayConfig.copyWith(showCoordinates: v);
+                        });
+                        setState(() {});
+                      },
+                    ),
+                    SwitchListTile(
+                      value: _overlayConfig.showTimestamp,
+                      title: const Text('Tampilkan timestamp', style: TextStyle(color: Colors.white)),
+                      onChanged: (v) {
+                        setModalState(() {
+                          _overlayConfig = _overlayConfig.copyWith(showTimestamp: v);
+                        });
+                        setState(() {});
+                      },
+                    ),
+                    SwitchListTile(
+                      value: _overlayConfig.showMiniMap,
+                      title: const Text('Tampilkan mini map', style: TextStyle(color: Colors.white)),
+                      onChanged: (v) {
+                        setModalState(() {
+                          _overlayConfig = _overlayConfig.copyWith(showMiniMap: v);
+                        });
+                        setState(() {});
+                      },
+                    ),
+                    const SizedBox(height: 6),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
+  Future<void> _onOpenSettings() async {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.black87,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        final primary = Theme.of(context).colorScheme.primary;
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Camera Settings', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                title: const Text('Watermark', style: TextStyle(color: Colors.white)),
+                value: _isWatermarkOn,
+                activeColor: primary,
+                onChanged: (value) {
+                  setState(() => _isWatermarkOn = value);
+                },
+              ),
+              SwitchListTile(
+                title: const Text('Flash', style: TextStyle(color: Colors.white)),
+                value: _isFlashOn,
+                activeColor: primary,
+                onChanged: (value) async {
+                  setState(() => _isFlashOn = value);
+                  await _applyFlashStateSafely(_isFlashOn);
+                },
+              ),
+              SwitchListTile(
+                title: const Text('Grid', style: TextStyle(color: Colors.white)),
+                value: _showGrid,
+                activeColor: primary,
+                onChanged: (value) {
+                  setState(() => _showGrid = value);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: Colors.black,
+    body: SafeArea(
+      child: FutureBuilder<void>(
+        future: _initializeControllerFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator.adaptive(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            );
+          }
+
+          if (snapshot.hasError ||
+              _controller == null ||
+              !_controller!.value.isInitialized) {
+            final msg = snapshot.hasError ? snapshot.error.toString() : 'Camera not initialized';
+            _logger.error('Camera preview failed', msg);
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  'Failed to initialize camera.\n$msg',
+                  style: const TextStyle(color: Colors.white70),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
+          }
+
+
+          final screenWidth = MediaQuery.of(context).size.width;
+          const targetAspect = 16 / 9;
+
+          return OrientationBuilder(
+            builder: (context, orientation) {
+              // Frame kamera ditaruh di area yang tersedia agar bisa fill layar.
+              // Gunakan height sisa setelah UI overlay (top bar + bottom bar + info overlay).
+              final double frameWidth = screenWidth;
+              final double frameHeight = MediaQuery.of(context).size.height - 56 - 64; // top bar + bottom bar
+              final double safeFrameHeight = frameHeight > 0 ? frameHeight : MediaQuery.of(context).size.height;
+
+
+              return Stack(
+                children: [
+                  Align(
+                    alignment: Alignment.topCenter,
+                    child: SizedBox(
+                      width: frameWidth,
+                      height: frameHeight,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _tapToFocus,
+                        child: _buildCameraPreview(context),
+                      ),
+                    ),
+                  ),
+
+                  if (_showGrid)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: CustomPaint(
+                          painter: GridPainter(),
+                        ),
+                      ),
+                    ),
+
+                  if (_isRecording)
+                    Positioned(
+                      top: 16,
+                      left: 16,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(
+                              Icons.fiber_manual_record,
+                              color: Colors.white,
+                              size: 12,
+                            ),
+                            SizedBox(width: 6),
+                            Text(
+                              'REC',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: _buildTopControlBar(context),
+                  ),
+
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: 180,
+                    child: _InfoOverlay(
+                      meta: _meta,
+                      config: _overlayConfig,
+                      lastLocationUpdateTime: _lastLocationUpdateTime,
+                      isLoading: _locationLoading,
+                    ),
+                  ),
+
+                  Positioned(
+                    top: 72,
+                    left: 16,
+                    right: 16,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: IgnorePointer(
+                        ignoring: false,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.55),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.08),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              for (final z in _zoomPresets)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
+                                  child: InkWell(
+                                    onTap: () => _applyZoom(z),
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: (z - _zoomLevel).abs() < 0.01
+                                            ? Colors.blue.withOpacity(0.25)
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color:
+                                              (z - _zoomLevel).abs() < 0.01
+                                                  ? Colors.blue.withOpacity(0.7)
+                                                  : Colors.white.withOpacity(
+                                                      0.10,
+                                                    ),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        '${z.toStringAsFixed(z == 1.0 ? 0 : 1)}x',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: SafeArea(
+                      top: false,
+                      child: _buildBottomSection(),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      ),
+    ),
+  );
 }
 
-// ========== WIDGETS ==========
+  Widget _buildBottomSection() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _BottomModeSelector(
+          selectedMode: _selectedMode,
+          onModeChanged: (mode) {
+            setState(() {
+              _selectedMode = mode;
+              if (mode != CameraMode.video) _isRecording = false;
+            });
+          },
+        ),
+        const SizedBox(height: 8),
+        _BottomActionBar(
+          selectedMode: _selectedMode,
+          isRecording: _isRecording,
+          onCapture: _onCapture,
+          onOpenTemplates: _onOpenTemplates,
+          lastPhoto: _lastPhoto,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTopControlBar(BuildContext context) {
+    return Container(
+      height: 56,
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.7),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(12),
+          bottomRight: Radius.circular(12),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _TopIconButton(icon: Icons.close, tooltip: 'Tutup kamera', onPressed: () => Navigator.of(context).maybePop()),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _TopIconButton(
+                icon: _isWatermarkOn ? Icons.water_drop : Icons.water_drop_outlined,
+                tooltip: 'Toggle watermark',
+                onPressed: () => setState(() => _isWatermarkOn = !_isWatermarkOn),
+              ),
+              const SizedBox(width: 10),
+              _TopIconButton(
+                icon: _isFlashOn ? Icons.flash_on : Icons.flash_off,
+                tooltip: 'Toggle flash',
+                onPressed: () async {
+                  setState(() => _isFlashOn = !_isFlashOn);
+                  await _applyFlashStateSafely(_isFlashOn);
+                },
+              ),
+              const SizedBox(width: 10),
+              _TopIconButton(icon: Icons.grid_on, tooltip: 'Toggle grid', onPressed: () => setState(() => _showGrid = !_showGrid)),
+              const SizedBox(width: 10),
+              _TopIconButton(icon: Icons.layers, tooltip: 'Overlay / Templates', onPressed: _onOpenTemplates),
+            ],
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              _TopIconButton(icon: Icons.my_location, tooltip: 'Refetch lokasi', onPressed: () => _refreshLocationData(showLoading: true)),
+              const SizedBox(width: 10),
+              _TopIconButton(icon: Icons.rotate_right, tooltip: 'Rotate camera', onPressed: _switchCamera),
+              const SizedBox(width: 10),
+              _TopIconButton(icon: Icons.settings, tooltip: 'Settings', onPressed: _onOpenSettings),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _InfoOverlay extends StatelessWidget {
   final CapturedMeta meta;
@@ -1647,8 +1242,17 @@ class _InfoOverlay extends StatelessWidget {
     required this.meta,
     required this.config,
     required this.lastLocationUpdateTime,
-    this.isLoading = false,
+    required this.isLoading,
   });
+
+  String _formatDateTime(DateTime dt) {
+    final d = dt.day.toString().padLeft(2, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final y = dt.year;
+    final hh = dt.hour.toString().padLeft(2, '0');
+    final mm = dt.minute.toString().padLeft(2, '0');
+    return '$d/$m/$y $hh:$mm';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1667,11 +1271,7 @@ class _InfoOverlay extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.location_on,
-                color: Colors.white70,
-                size: 16,
-              ),
+              const Icon(Icons.location_on, color: Colors.white70, size: 16),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -1700,11 +1300,7 @@ class _InfoOverlay extends StatelessWidget {
           if (config.showTimestamp)
             Text(
               ts,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
             ),
           if (config.showAddress) ...[
             const SizedBox(height: 8),
@@ -1725,10 +1321,7 @@ class _InfoOverlay extends StatelessWidget {
               'Lat,Lng: ${meta.coordinates}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
-                fontSize: 12,
-              ),
+              style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12),
             ),
           ],
           if (config.showMiniMap) ...[
@@ -1739,9 +1332,7 @@ class _InfoOverlay extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.black26,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.08),
-                ),
+                border: Border.all(color: Colors.white.withOpacity(0.08)),
               ),
               child: const Center(
                 child: Text(
@@ -1754,15 +1345,6 @@ class _InfoOverlay extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _formatDateTime(DateTime dt) {
-    final d = dt.day.toString().padLeft(2, '0');
-    final m = dt.month.toString().padLeft(2, '0');
-    final y = dt.year;
-    final hh = dt.hour.toString().padLeft(2, '0');
-    final mm = dt.minute.toString().padLeft(2, '0');
-    return '$d/$m/$y $hh:$mm';
   }
 }
 
@@ -1778,51 +1360,17 @@ class _BottomModeSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.black,
-      ),
+      decoration: const BoxDecoration(color: Colors.black),
       child: SizedBox(
         height: 64,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
             children: [
-              Expanded(
-                child: _ModeItem(
-                  mode: CameraMode.locationShare,
-                  selectedMode: selectedMode,
-                  icon: Icons.share_location,
-                  label: 'Location Share',
-                  onTap: () => onModeChanged(CameraMode.locationShare),
-                ),
-              ),
-              Expanded(
-                child: _ModeItem(
-                  mode: CameraMode.photo,
-                  selectedMode: selectedMode,
-                  icon: Icons.photo_camera,
-                  label: 'Photo',
-                  onTap: () => onModeChanged(CameraMode.photo),
-                ),
-              ),
-              Expanded(
-                child: _ModeItem(
-                  mode: CameraMode.video,
-                  selectedMode: selectedMode,
-                  icon: Icons.videocam,
-                  label: 'Video',
-                  onTap: () => onModeChanged(CameraMode.video),
-                ),
-              ),
-              Expanded(
-                child: _ModeItem(
-                  mode: CameraMode.reporting,
-                  selectedMode: selectedMode,
-                  icon: Icons.description,
-                  label: 'Reporting',
-                  onTap: () => onModeChanged(CameraMode.reporting),
-                ),
-              ),
+              Expanded(child: _ModeItem(mode: CameraMode.locationShare, selectedMode: selectedMode, icon: Icons.share_location, label: 'Location Share', onTap: () => onModeChanged(CameraMode.locationShare))),
+              Expanded(child: _ModeItem(mode: CameraMode.photo, selectedMode: selectedMode, icon: Icons.photo_camera, label: 'Photo', onTap: () => onModeChanged(CameraMode.photo))),
+              Expanded(child: _ModeItem(mode: CameraMode.video, selectedMode: selectedMode, icon: Icons.videocam, label: 'Video', onTap: () => onModeChanged(CameraMode.video))),
+              Expanded(child: _ModeItem(mode: CameraMode.reporting, selectedMode: selectedMode, icon: Icons.description, label: 'Reporting', onTap: () => onModeChanged(CameraMode.reporting))),
             ],
           ),
         ),
@@ -1850,7 +1398,7 @@ class _ModeItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final isActive = mode == selectedMode;
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final Color color = isActive ? primaryColor : Colors.white60;
+    final color = isActive ? primaryColor : Colors.white60;
 
     return InkWell(
       onTap: onTap,
@@ -1888,20 +1436,18 @@ class _ModeItem extends StatelessWidget {
 }
 
 class _BottomActionBar extends StatelessWidget {
-  final VoidCallback onCapture;
+  final Future<void> Function() onCapture;
   final Future<void> Function() onOpenTemplates;
   final CapturedPhoto? lastPhoto;
   final CameraMode selectedMode;
   final bool isRecording;
-  final VoidCallback onOpenPhotoHistory;
 
   const _BottomActionBar({
     required this.onCapture,
     required this.onOpenTemplates,
     required this.lastPhoto,
     required this.selectedMode,
-    required this.onOpenPhotoHistory,
-    this.isRecording = false,
+    required this.isRecording,
   });
 
   @override
@@ -1921,7 +1467,19 @@ class _BottomActionBar extends StatelessWidget {
             child: Align(
               alignment: Alignment.centerLeft,
               child: GestureDetector(
-                onTap: onOpenPhotoHistory,
+                onTap: () {
+                  if (lastPhoto == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Belum ada riwayat foto tracking'),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
+                    return;
+                  }
+
+                  Navigator.pushNamed(context, AppRoutes.history);
+                },
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
@@ -1933,10 +1491,7 @@ class _BottomActionBar extends StatelessWidget {
                     ),
                     child: lastPhoto == null
                         ? const Icon(Icons.image, color: Colors.white54, size: 20)
-                        : Image.file(
-                            File(lastPhoto!.filePath),
-                            fit: BoxFit.cover,
-                          ),
+                        : Image.file(File(lastPhoto!.filePath), fit: BoxFit.cover),
                   ),
                 ),
               ),
@@ -1958,12 +1513,8 @@ class _BottomActionBar extends StatelessWidget {
                   child: Container(
                     margin: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      shape: selectedMode == CameraMode.video && isRecording
-                          ? BoxShape.rectangle
-                          : BoxShape.circle,
-                      borderRadius: selectedMode == CameraMode.video && isRecording
-                          ? BorderRadius.circular(6)
-                          : null,
+                      shape: selectedMode == CameraMode.video && isRecording ? BoxShape.rectangle : BoxShape.circle,
+                      borderRadius: selectedMode == CameraMode.video && isRecording ? BorderRadius.circular(6) : null,
                       color: shutterColor,
                     ),
                   ),
@@ -1977,10 +1528,7 @@ class _BottomActionBar extends StatelessWidget {
               child: TextButton.icon(
                 onPressed: onOpenTemplates,
                 icon: const Icon(Icons.layers, color: Colors.white),
-                label: const Text(
-                  'Template',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                ),
+                label: const Text('Template', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
                 style: TextButton.styleFrom(
                   backgroundColor: Colors.black.withOpacity(0.25),
                   shape: RoundedRectangleBorder(
@@ -2030,54 +1578,6 @@ class _TopIconButton extends StatelessWidget {
   }
 }
 
-class _DetailRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-
-  const _DetailRow({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, color: Colors.blue, size: 20),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.6),
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -2085,31 +1585,13 @@ class GridPainter extends CustomPainter {
       ..color = Colors.white.withOpacity(0.5)
       ..strokeWidth = 1.0;
 
-    // Vertical lines (rule of thirds)
-    canvas.drawLine(
-      Offset(size.width / 3, 0),
-      Offset(size.width / 3, size.height),
-      paint,
-    );
-    canvas.drawLine(
-      Offset(2 * size.width / 3, 0),
-      Offset(2 * size.width / 3, size.height),
-      paint,
-    );
-
-    // Horizontal lines (rule of thirds)
-    canvas.drawLine(
-      Offset(0, size.height / 3),
-      Offset(size.width, size.height / 3),
-      paint,
-    );
-    canvas.drawLine(
-      Offset(0, 2 * size.height / 3),
-      Offset(size.width, 2 * size.height / 3),
-      paint,
-    );
+    canvas.drawLine(Offset(size.width / 3, 0), Offset(size.width / 3, size.height), paint);
+    canvas.drawLine(Offset(2 * size.width / 3, 0), Offset(2 * size.width / 3, size.height), paint);
+    canvas.drawLine(Offset(0, size.height / 3), Offset(size.width, size.height / 3), paint);
+    canvas.drawLine(Offset(0, 2 * size.height / 3), Offset(size.width, 2 * size.height / 3), paint);
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+

@@ -21,8 +21,6 @@
    info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:133:7 - avoid_print
    info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:137:7 - avoid_print
    info - Don't invoke 'print' in production code - lib\features\tracking\data\datasources\tracking_local_datasource_impl.dart:148:5 - avoid_print
-  error - Missing concrete implementations of 'CameraService.getController', 'CameraService.init', and 'CameraService.isInitialized' - lib\features\tracking\data\services\real_camera_service.dart:10:7 - non_abstract_class_inherits_abstract_member
-   info - The member 'dispose' overrides an inherited member but isn't annotated with '@override' - lib\features\tracking\data\services\real_camera_service.dart:115:16 - annotate_overrides
 warning - Unused import: 'package:flutter/material.dart' - lib\features\tracking\domain\entities\app_settings.dart:1:8 - unused_import
    info - Dangling library doc comment - lib\features\tracking\presentation\DEVELOPER_NAVIGATION_GUIDE.dart:1:1 - dangling_library_doc_comments
    info - The file name 'DEVELOPER_NAVIGATION_GUIDE.dart' isn't a lower_case_with_underscores identifier - lib\features\tracking\presentation\DEVELOPER_NAVIGATION_GUIDE.dart:1:1 - file_names
@@ -76,42 +74,67 @@ warning - Unused import: 'package:flutter/material.dart' - lib\features\tracking
    info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:125:9 - avoid_print
    info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:127:9 - avoid_print
    info - Don't invoke 'print' in production code - lib\features\tracking\presentation\debug_helper.dart:130:7 - avoid_print
-   info - The private field _locationLoading could be 'final' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:93:8 - prefer_final_fields
-   info - The private field _overlayConfig could be 'final' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:101:17 - prefer_final_fields
-   info - The private field _meta could be 'final' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:103:16 - prefer_final_fields
-  error - Methods can't be invoked in constant expressions - lib\features\tracking\presentation\pages\camera_tracking_page.dart:107:16 - const_eval_method_invocation
-  error - The method '_refreshLocationData' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:130:13 - undefined_method
-  error - The method '_ThirdsGridPainter' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:249:44 - undefined_method
-  error - The method '_InfoOverlay' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:271:26 - undefined_method
-  error - The method '_BottomModeSelector' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:297:9 - undefined_method
-  error - The method '_BottomActionBar' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:310:9 - undefined_method
-  error - The method '_TopIconButton' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:343:13 - undefined_method
-  error - The method '_TopIconButton' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:351:17 - undefined_method
-  error - The method '_TopIconButton' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:357:17 - undefined_method
-  error - The method '_TopIconButton' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:363:17 - undefined_method
-  error - The method '_TopIconButton' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:369:17 - undefined_method
-  error - The method '_TopIconButton' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:379:17 - undefined_method
-  error - The method '_TopIconButton' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:385:17 - undefined_method
-  error - The method '_TopIconButton' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:391:17 - undefined_method
-  error - The method '_refreshLocationData' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:441:11 - undefined_method
-   info - 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre - lib\features\tracking\presentation\pages\camera_tracking_page.dart:480:13 - deprecated_member_use
-   info - 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre - lib\features\tracking\presentation\pages\camera_tracking_page.dart:486:13 - deprecated_member_use
-  error - The method '_handleVideoRecording' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:510:17 - undefined_method
-  error - The method '_handleReportingCapture' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:513:17 - undefined_method
-  error - The method '_refreshLocationData' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:527:13 - undefined_method
-  error - The method 'Clipboard' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:581:23 - undefined_method
-  error - Undefined name 'ClipboardDataFormat' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:581:54 - undefined_identifier
-  error - Undefined name '_' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:582:5 - undefined_identifier
-  error - Undefined name 'Clipboard' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:590:13 - undefined_identifier
-  error - The method 'ClipboardData' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:590:31 - undefined_method
-  error - The method '_formatDateTime' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:606:16 - undefined_method
-  error - The method '_refreshLocationData' isn't defined for the type '_CameraTrackingPageState' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:630:13 - undefined_method
-  error - Unterminated string literal - lib\features\tracking\presentation\pages\camera_tracking_page.dart:663:76 - unterminated_string_literal
-  error - Expected to find ')' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:664:1 - expected_token
-  error - Expected to find ';' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:664:1 - expected_token
-  error - Expected to find '}' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:664:1 - expected_token
-   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\features\tracking\presentation\pages\export_page.dart:143:15 - deprecated_member_use
-  error - Undefined name 'exportTrackingsProvider' - lib\features\tracking\presentation\pages\export_page.dart:253:33 - undefined_identifier
+   info - The import of 'package:flutter/foundation.dart' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/services.dart' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:3:8 - unnecessary_import
+warning - The value of the field '_autoOpenShareAfterCapture' isn't used - lib\features\tracking\presentation\pages\camera_tracking_page.dart:95:8 - unused_field
+   info - The private field _photoHistory could be 'final' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:98:23 - prefer_final_fields
+warning - Unnecessary type check; the result is always 'true' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:280:51 - unnecessary_type_check
+warning - Dead code - lib\features\tracking\presentation\pages\camera_tracking_page.dart:280:69 - dead_code
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:408:49 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:410:68 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:425:59 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:430:61 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:431:62 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:461:45 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:539:31 - deprecated_member_use
+warning - Unnecessary type check; the result is always 'true' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:627:47 - unnecessary_type_check
+warning - Dead code - lib\features\tracking\presentation\pages\camera_tracking_page.dart:627:65 - dead_code
+   info - 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre - lib\features\tracking\presentation\pages\camera_tracking_page.dart:674:13 - deprecated_member_use
+   info - 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre - lib\features\tracking\presentation\pages\camera_tracking_page.dart:685:13 - deprecated_member_use
+   info - 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre - lib\features\tracking\presentation\pages\camera_tracking_page.dart:693:13 - deprecated_member_use
+warning - Unnecessary type check; the result is always 'true' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:756:48 - unnecessary_type_check
+warning - Dead code - lib\features\tracking\presentation\pages\camera_tracking_page.dart:756:66 - dead_code
+warning - Unnecessary type check; the result is always 'true' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:767:45 - unnecessary_type_check
+warning - Dead code - lib\features\tracking\presentation\pages\camera_tracking_page.dart:767:63 - dead_code
+warning - Unnecessary type check; the result is always 'true' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:839:49 - unnecessary_type_check
+warning - Dead code - lib\features\tracking\presentation\pages\camera_tracking_page.dart:839:67 - dead_code
+warning - Unnecessary type check; the result is always 'true' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:895:45 - unnecessary_type_check
+warning - Dead code - lib\features\tracking\presentation\pages\camera_tracking_page.dart:895:63 - dead_code
+warning - Unnecessary type check; the result is always 'true' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:945:47 - unnecessary_type_check
+warning - Dead code - lib\features\tracking\presentation\pages\camera_tracking_page.dart:945:65 - dead_code
+warning - Unnecessary type check; the result is always 'true' - lib\features\tracking\presentation\pages\camera_tracking_page.dart:977:49 - unnecessary_type_check
+warning - Dead code - lib\features\tracking\presentation\pages\camera_tracking_page.dart:977:67 - dead_code
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1019:23 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1127:53 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1142:53 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1157:53 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1172:53 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1268:55 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1305:67 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1315:67 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1327:59 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1383:51 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1418:53 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1426:51 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1429:70 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1482:76 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1598:59 - deprecated_member_use
+warning - The declaration '_sharePhoto' isn't referenced - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1625:16 - unused_element
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1669:29 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1725:37 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1738:37 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1752:39 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1926:27 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1940:43 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1941:62 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1965:41 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1994:49 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:1997:57 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:2032:33 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:2067:39 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\camera_tracking_page.dart:2094:30 - deprecated_member_use
+warning - Unused import: '../../domain/services/export_service.dart' - lib\features\tracking\presentation\pages\export_page.dart:6:8 - unused_import
+warning - Duplicate import - lib\features\tracking\presentation\pages\export_page.dart:7:8 - duplicate_import
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\features\tracking\presentation\pages\export_page.dart:148:15 - deprecated_member_use
    info - Unnecessary use of multiple underscores - lib\features\tracking\presentation\pages\history_page.dart:308:43 - unnecessary_underscores
    info - Unnecessary use of multiple underscores - lib\features\tracking\presentation\pages\history_page.dart:308:47 - unnecessary_underscores
    info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\history_page.dart:384:36 - deprecated_member_use
@@ -122,7 +145,6 @@ warning - Unused import: 'package:flutter/material.dart' - lib\features\tracking
    info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\home_page.dart:189:80 - deprecated_member_use
    info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\home_page.dart:233:35 - deprecated_member_use
 warning - Unused import: '../../domain/entities/tracking.dart' - lib\features\tracking\presentation\pages\map_page.dart:6:8 - unused_import
-  error - Undefined name 'getTrackingByIdProvider' - lib\features\tracking\presentation\pages\photo_detail_page.dart:82:32 - undefined_identifier
    info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\tracking_detail_page.dart:91:34 - deprecated_member_use
    info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\pages\tracking_detail_page.dart:145:52 - deprecated_member_use
    info - Unnecessary use of multiple underscores - lib\features\tracking\presentation\pages\tracking_detail_page.dart:237:101 - unnecessary_underscores
@@ -142,10 +164,10 @@ warning - Unused import: '../../domain/entities/tracking.dart' - lib\features\tr
    info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\tracking\presentation\widgets\photo_card.dart:105:39 - deprecated_member_use
 warning - Unused import: 'features/tracking/presentation/pages/home_page.dart' - lib\routes.dart:8:8 - unused_import
 
-flutter : 141 issues found. (ran in 7.7s)
+flutter : 163 issues found. (ran in 5.6s)
 At line:1 char:1
-+ flutter analyze 2>&1 | Out-File -Encoding UTF8 -FilePath analyze_outp ...
++ flutter analyze 2>&1 | Out-File -FilePath analyze_output.txt -Encodin ...
 + ~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (141 issues found. (ran in 7.7s):String) [], RemoteException
+    + CategoryInfo          : NotSpecified: (163 issues found. (ran in 5.6s):String) [], RemoteException
     + FullyQualifiedErrorId : NativeCommandError
  

@@ -1,82 +1,128 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../routes.dart';
 import '../../domain/entities/history_item.dart';
+import '../../domain/entities/tracking.dart';
+import '../providers.dart';
+import '../tracking_providers.dart';
+
 
 /// =============================================================================
 /// HISTORY PAGE - Daftar Tracking Log
 /// =============================================================================
-/// 
+///
 /// Fungsi:
-/// - Menampilkan daftar history tracking/foto
+/// - Menampilkan daftar history tracking/foto (berdasarkan data repository)
 /// - Search by location/text
 /// - Filter by date
-/// 
+///
 /// Route: /history
-class HistoryPage extends StatefulWidget {
+class HistoryPage extends ConsumerStatefulWidget {
   const HistoryPage({super.key});
 
   @override
-  State<HistoryPage> createState() => _HistoryPageState();
+  ConsumerState<HistoryPage> createState() => _HistoryPageState();
 }
 
-class _HistoryPageState extends State<HistoryPage> {
+class _HistoryPageState extends ConsumerState<HistoryPage> {
+
+  // Referensi provider repository sudah disediakan lewat ../providers.dart
+
   // Search & filter state
   String _searchQuery = '';
   DateTime? _selectedDate;
 
-  // Dummy data (replace with real provider in production)
-  final List<HistoryItem> _allItems = HistoryItemDummy.getDummyList();
+  /// Selection untuk delete
+  final Set<String> _selectedIds = <String>{};
 
-  // Filtered items
-  List<HistoryItem> get _filteredItems {
-    var items = _allItems;
+  bool get _isSelectionMode => _selectedIds.isNotEmpty;
+
+  // Convert domain Tracking list to HistoryItem list with mapping for existing UI.
+  List<HistoryItem> _mapToHistoryItems(List<Tracking> trackings) {
+    return trackings.map((t) {
+      return HistoryItem(
+        id: t.id,
+        timestamp: t.timestamp,
+        locationSummary: t.address.isNotEmpty
+            ? t.address
+            : '${t.latitude}, ${t.longitude}',
+        status: HistoryStatus.snapshot, // default; UI hanya butuh badge
+        latitude: t.latitude,
+        longitude: t.longitude,
+        imagePath: t.imagePath,
+      );
+    }).toList();
+  }
+
+  List<HistoryItem> _filterItems(List<HistoryItem> items) {
+    var filtered = items;
 
     // Filter by search query
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
-      items = items.where((item) {
+      filtered = filtered.where((item) {
         return item.locationSummary.toLowerCase().contains(query);
       }).toList();
     }
 
     // Filter by date
     if (_selectedDate != null) {
-      items = items.where((item) {
+      filtered = filtered.where((item) {
         return item.timestamp.year == _selectedDate!.year &&
-               item.timestamp.month == _selectedDate!.month &&
-               item.timestamp.day == _selectedDate!.day;
+            item.timestamp.month == _selectedDate!.month &&
+            item.timestamp.day == _selectedDate!.day;
       }).toList();
     }
 
     // Sort by timestamp descending (newest first)
-    items.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    filtered.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
-    return items;
+    return filtered;
   }
 
   @override
   Widget build(BuildContext context) {
+    final trackingListAsync = ref.watch(trackingListProvider);
+
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),  // Dark background
+      backgroundColor: const Color(0xFF121212), // Dark background
       appBar: AppBar(
         title: const Text('History'),
-        backgroundColor: const Color(0xFF1a237e),  // Navy
+        backgroundColor: const Color(0xFF1a237e), // Navy
         elevation: 0,
       ),
       body: Column(
         children: [
-          // ===================================================================
-          // FILTER AREA - Search + Date Picker
-          // ===================================================================
+          if (_isSelectionMode)
+            _buildSelectionToolbar(),
           _buildFilterArea(),
-
-          // ===================================================================
-          // HISTORY LIST
-          // ===================================================================
           Expanded(
-            child: _filteredItems.isEmpty 
-                ? _buildEmptyState() 
-                : _buildHistoryList(),
+
+            child: trackingListAsync.when(
+              loading: () =>
+                  const Center(child: CircularProgressIndicator()),
+              error: (e, st) => Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Failed to load history\n$e',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                ),
+              ),
+              data: (trackings) {
+                final allItems = _mapToHistoryItems(trackings);
+                final filteredItems = _filterItems(allItems);
+
+                if (filteredItems.isEmpty) {
+                  return _buildEmptyState();
+                }
+
+                return _buildHistoryList(filteredItems);
+              },
+            ),
           ),
         ],
       ),
@@ -90,7 +136,7 @@ class _HistoryPageState extends State<HistoryPage> {
   Widget _buildFilterArea() {
     return Container(
       padding: const EdgeInsets.all(12),
-      color: const Color(0xFF1e1e1e),  // Dark grey
+      color: const Color(0xFF1e1e1e), // Dark grey
       child: Column(
         children: [
           // Row: Search Bar
@@ -111,10 +157,12 @@ class _HistoryPageState extends State<HistoryPage> {
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide.none,
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16),
             ),
             style: const TextStyle(color: Colors.white),
-            onChanged: (value) => setState(() => _searchQuery = value),
+            onChanged: (value) =>
+                setState(() => _searchQuery = value),
           ),
 
           const SizedBox(height: 8),
@@ -127,14 +175,17 @@ class _HistoryPageState extends State<HistoryPage> {
                 onPressed: _pickDate,
                 icon: const Icon(Icons.calendar_today, size: 16),
                 label: Text(
-                  _selectedDate != null 
+                  _selectedDate != null
                       ? _formatDate(_selectedDate!)
                       : 'Semua Tanggal',
                 ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.white70,
                   side: const BorderSide(color: Colors.grey),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                 ),
               ),
 
@@ -152,10 +203,13 @@ class _HistoryPageState extends State<HistoryPage> {
 
               const Spacer(),
 
-              // Item count
+              // Item count Placeholder (bisa diisi nanti)
               Text(
-                '${_filteredItems.length} item',
-                style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                ' ',
+                style: TextStyle(
+                  color: Colors.grey[500],
+                  fontSize: 12,
+                ),
               ),
             ],
           ),
@@ -168,15 +222,36 @@ class _HistoryPageState extends State<HistoryPage> {
   // HISTORY LIST
   // =========================================================================
 
-  Widget _buildHistoryList() {
+  Widget _buildHistoryList(List<HistoryItem> items) {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: _filteredItems.length,
+      itemCount: items.length,
       itemBuilder: (context, index) {
-        final item = _filteredItems[index];
+        final item = items[index];
+        final isSelected = _selectedIds.contains(item.id);
+
         return _HistoryListItem(
           item: item,
-          onTap: () => _showItemDetail(item),
+          isSelected: isSelected,
+          selectionMode: _isSelectionMode,
+          onTap: () {
+            if (_isSelectionMode) {
+              setState(() {
+                if (isSelected) {
+                  _selectedIds.remove(item.id);
+                } else {
+                  _selectedIds.add(item.id);
+                }
+              });
+              return;
+            }
+            _showItemDetail(item);
+          },
+          onLongPress: () {
+            setState(() {
+              _selectedIds.add(item.id);
+            });
+          },
         );
       },
     );
@@ -197,7 +272,10 @@ class _HistoryPageState extends State<HistoryPage> {
             _searchQuery.isEmpty && _selectedDate == null
                 ? 'Belum ada history'
                 : 'Tidak ada hasil',
-            style: TextStyle(color: Colors.grey[500], fontSize: 16),
+            style: TextStyle(
+              color: Colors.grey[500],
+              fontSize: 16,
+            ),
           ),
         ],
       ),
@@ -218,7 +296,7 @@ class _HistoryPageState extends State<HistoryPage> {
         return Theme(
           data: ThemeData.dark().copyWith(
             colorScheme: const ColorScheme.dark(
-              primary: Color(0xFF00e676),  // Neon green accent
+              primary: Color(0xFF00e676),
               surface: Color(0xFF1e1e1e),
             ),
           ),
@@ -239,15 +317,102 @@ class _HistoryPageState extends State<HistoryPage> {
     });
   }
 
-  void _showItemDetail(HistoryItem item) {
-    // TODO: Navigate to detail page
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Item: ${item.locationSummary}'),
-        duration: const Duration(seconds: 1),
+  Widget _buildSelectionToolbar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      color: const Color(0xFF1a237e),
+      child: Row(
+        children: [
+          Text(
+            '${_selectedIds.length} dipilih',
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          ),
+          const Spacer(),
+          IconButton(
+            tooltip: 'Batal',
+            icon: const Icon(Icons.close, color: Colors.white),
+            onPressed: () {
+              setState(() => _selectedIds.clear());
+            },
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            tooltip: 'Hapus',
+            icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
+            onPressed: _deleteSelected,
+          ),
+        ],
       ),
     );
   }
+
+
+  Future<void> _deleteSelected() async {
+    try {
+      final ids = _selectedIds.toList(growable: false);
+      if (ids.isEmpty) return;
+
+      // konfirmasi sederhana
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Hapus data'),
+          content: Text('Hapus ${ids.length} foto/tracking yang dipilih?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Hapus'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed != true) return;
+
+      final repo = ref.read(trackingRepositoryProvider);
+      for (final id in ids) {
+        await repo.deleteTracking(id);
+      }
+
+      if (!mounted) return;
+      setState(() => _selectedIds.clear());
+      ref.invalidate(trackingListProvider);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Berhasil menghapus data'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal menghapus: $e'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+  }
+
+
+  void _showItemDetail(HistoryItem item) {
+    // We don't have the full Tracking object here; PhotoDetailPage can load by ID.
+    // Pass the HistoryItem id as the Tracking id.
+    Navigator.pushNamed(
+      context,
+      AppRoutes.detail,
+      arguments: item.id,
+    );
+  }
+
 
   String _formatDate(DateTime dt) {
     final d = dt.day.toString().padLeft(2, '0');
@@ -262,137 +427,154 @@ class _HistoryPageState extends State<HistoryPage> {
 
 class _HistoryListItem extends StatelessWidget {
   final HistoryItem item;
+  final bool isSelected;
+  final bool selectionMode;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   const _HistoryListItem({
     required this.item,
+    required this.isSelected,
+    required this.selectionMode,
     required this.onTap,
+    this.onLongPress,
   });
 
   @override
   Widget build(BuildContext context) {
     final isTracking = item.status == HistoryStatus.trackingSession;
-    final statusColor = isTracking 
-        ? const Color(0xFF00e676)  // Neon green
-        : const Color(0xFF64b5f6);   // Blue
-    
+    final statusColor = isTracking
+        ? const Color(0xFF00e676) // Neon green
+        : const Color(0xFF64b5f6); // Blue
+
     final statusText = isTracking ? 'Tracking' : 'Snapshot';
 
     return InkWell(
       onTap: onTap,
+      onLongPress: selectionMode ? onLongPress : null,
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: const Color(0xFF1e1e1e),
           borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFF00e676)
+                : Colors.transparent,
+            width: isSelected ? 2 : 0,
+          ),
         ),
-        child: Row(
+        child: Stack(
           children: [
-            // ===================================================================
-            // LEFT: Image/Icon
-            // ===================================================================
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: const Color(0xFF2c2c2c),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: item.imagePath != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        item.imagePath!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(
-                          Icons.image,
+            Row(
+              children: [
+                // LEFT: Image/Icon
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2c2c2c),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: item.imagePath != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            item.imagePath!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Icon(
+                              Icons.image,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        )
+                      : const Icon(
+                          Icons.location_on,
                           color: Colors.grey,
                         ),
-                      ),
-                    )
-                  : const Icon(
-                      Icons.location_on,
-                      color: Colors.grey,
-                    ),
-            ),
+                ),
 
-            const SizedBox(width: 12),
+                const SizedBox(width: 12),
 
-            // ===================================================================
-            // CENTER: Content
-            // ===================================================================
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Row: Date + Time
-                  Row(
+                // CENTER: Content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        item.formattedDate,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      // Row: Date + Time
+                      Row(
+                        children: [
+                          Text(
+                            item.formattedDate,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            item.formattedTime,
+                            style: TextStyle(
+                              color: Colors.grey[500],
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
+
+                      const SizedBox(height: 4),
+
+                      // Location
                       Text(
-                        item.formattedTime,
+                        item.locationSummary,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+
+                      const SizedBox(height: 4),
+
+                      // Coordinates (jika ada)
+                      Text(
+                        item.coordinatesDisplay,
                         style: TextStyle(
-                          color: Colors.grey[500],
-                          fontSize: 12,
+                          color: Colors.grey[600],
+                          fontSize: 10,
                         ),
                       ),
                     ],
                   ),
-
-                  const SizedBox(height: 4),
-
-                  // Location
-                  Text(
-                    item.locationSummary,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 13,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-
-                  const SizedBox(height: 4),
-
-                  // Coordinates ( jika ada)
-                  Text(
-                    item.coordinatesDisplay,
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // ===================================================================
-            // RIGHT: Status Badge
-            // ===================================================================
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: statusColor.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: statusColor, width: 1),
-              ),
-              child: Text(
-                statusText,
-                style: TextStyle(
-                  color: statusColor,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
                 ),
-              ),
+
+                // RIGHT: Status Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: statusColor,
+                      width: 1,
+                    ),
+                  ),
+                  child: Text(
+                    statusText,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
