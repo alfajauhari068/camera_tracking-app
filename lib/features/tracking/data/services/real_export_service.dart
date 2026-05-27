@@ -58,6 +58,10 @@ class RealExportService implements ExportService {
             'address': tracking.address,
             'accuracy': tracking.accuracy,
             'timestamp': tracking.timestamp.toIso8601String(),
+            'type': tracking.type.name,
+            'report_category': tracking.reportInfo?.category,
+            'report_note': tracking.reportInfo?.note,
+            'report_severity': tracking.reportInfo?.severity,
           }).toList(),
         );
       case 'CSV':
@@ -72,11 +76,16 @@ class RealExportService implements ExportService {
 
   String _buildCsv(List<Tracking> trackings) {
     final rows = <String>[];
-    rows.add('id,imagePath,latitude,longitude,address,accuracy,timestamp');
+    rows.add(
+      'id,imagePath,latitude,longitude,address,accuracy,timestamp,type,report_category,report_note,report_severity',
+    );
     for (final tracking in trackings) {
       final escapedAddress = tracking.address.replaceAll('"', '""');
+      final escapedCategory = tracking.reportInfo?.category.replaceAll('"', '""') ?? '';
+      final escapedNote = tracking.reportInfo?.note?.replaceAll('"', '""') ?? '';
+      final escapedSeverity = tracking.reportInfo?.severity?.replaceAll('"', '""') ?? '';
       rows.add(
-        '"${tracking.id}","${tracking.imagePath}",${tracking.latitude},${tracking.longitude},"$escapedAddress",${tracking.accuracy},"${tracking.timestamp.toIso8601String()}"',
+        '"${tracking.id}","${tracking.imagePath}",${tracking.latitude},${tracking.longitude},"$escapedAddress",${tracking.accuracy},"${tracking.timestamp.toIso8601String()}","${tracking.type.name}","$escapedCategory","$escapedNote","$escapedSeverity"',
       );
     }
     return rows.join('\n');

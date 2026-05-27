@@ -3,9 +3,8 @@
 
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData, TextInputFormatter;
-
-
+import 'package:flutter/services.dart'
+    show Clipboard, ClipboardData, TextInputFormatter;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -23,12 +22,8 @@ import '../providers.dart';
 import '../../domain/entities/tracking.dart';
 import '../../domain/entities/history_item.dart';
 
-
 // For navigator route names.
 import '../../../../routes.dart' show AppRoutes;
-
-
-
 
 // Keep enum names compatible with existing UI.
 enum CameraMode { locationShare, photo, video, reporting }
@@ -81,6 +76,16 @@ class CapturedPhoto {
   });
 }
 
+class ReportFormResult {
+  final String category;
+  final String? note;
+
+  const ReportFormResult({
+    required this.category,
+    this.note,
+  });
+}
+
 class CapturedMeta {
   final String locationName;
   final String address;
@@ -103,9 +108,7 @@ class CameraTrackingPage extends ConsumerStatefulWidget {
 }
 
 class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage> {
-
   final _logger = const AppLogger(tag: 'CameraTrackingPage');
-
 
   CaptureState get _captureState => ref.watch(captureNotifierProvider);
 
@@ -156,9 +159,12 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage> {
           overlayConfig: _overlayConfig,
         );
       });
+
+      // Invalidate trackingListProvider untuk refresh History page
+      // dengan data foto terbaru yang baru di-capture
+      ref.invalidate(trackingListProvider);
     }
   }
-
 
   CapturedPhoto? _lastPhoto;
   final List<CapturedPhoto> _photoHistory = [];
@@ -180,7 +186,8 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage> {
 
   CapturedMeta _meta = CapturedMeta(
     locationName: 'Kecamatan Contoh',
-    address: 'Jl. Contoh No. 123, Kelurahan Sampel, Kota Demo, Provinsi Nusantara',
+    address:
+        'Jl. Contoh No. 123, Kelurahan Sampel, Kota Demo, Provinsi Nusantara',
     coordinates: '-6.200000, 106.816666',
     timestamp: DateTime(2025, 1, 1, 12, 0, 0),
   );
@@ -200,7 +207,8 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage> {
   // Jadi nilai preset akan di-clamp ke range aktual controller.
   final List<double> _zoomPresets = const [0.6, 1.0, 2.0];
 
-  bool get _hasController => _controller != null && _controller!.value.isInitialized;
+  bool get _hasController =>
+      _controller != null && _controller!.value.isInitialized;
 
   static const double _targetAspect = 16 / 9;
 
@@ -216,7 +224,7 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage> {
 
       return false;
     } catch (e) {
-      _logger.error('Failed to request camera permission', e is Object ? e : e.toString());
+      _logger.error('Failed to request camera permission', e);
       return false;
     }
   }
@@ -233,7 +241,9 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage> {
     }
 
     final double cameraAspectRaw = controller.value.aspectRatio;
-    final double cameraAspect = cameraAspectRaw > 0 ? cameraAspectRaw : _targetAspect;
+    final double cameraAspect = cameraAspectRaw > 0
+        ? cameraAspectRaw
+        : _targetAspect;
 
     // Lebih sederhana & stabil: jaga aspek ratio tanpa clip/crop berlapis.
     return AspectRatio(
@@ -242,29 +252,25 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage> {
     );
   }
 
-
-
-
-
-
-
-
   @override
   void initState() {
     super.initState();
     _lastLocationUpdateTime ??= DateTime.now();
 
-    _initializeControllerFuture = _ensureCameraPermission().then((granted) async {
+    _initializeControllerFuture = _ensureCameraPermission().then((
+      granted,
+    ) async {
       if (!granted) {
-        throw CameraException('CameraPermissionDenied', 'Camera permission not granted');
+        throw CameraException(
+          'CameraPermissionDenied',
+          'Camera permission not granted',
+        );
       }
 
       await _initCamera();
       await _refreshLocationData(showLoading: false);
     });
   }
-
-
 
   Future<void> _initCamera({int? cameraIndex}) async {
     _isRecording = false;
@@ -340,7 +346,9 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage> {
         ? CameraLensDirection.back
         : CameraLensDirection.front;
 
-    final nextIdx = _availableCameras.indexWhere((c) => c.lensDirection == wantLens);
+    final nextIdx = _availableCameras.indexWhere(
+      (c) => c.lensDirection == wantLens,
+    );
     final fallbackIdx = (_currentCameraIndex + 1) % _availableCameras.length;
     final chosenIdx = nextIdx != -1 ? nextIdx : fallbackIdx;
 
@@ -361,7 +369,6 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage> {
 
     final double clamped = zoom.clamp(minZoomFallback, maxZoomFallback);
 
-
     try {
       await controller.setZoomLevel(clamped);
       if (!mounted) return;
@@ -370,19 +377,16 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage> {
       setState(() => _zoomLevel = clamped);
 
       _logger.info(
-        'Zoom set to ${clamped.toStringAsFixed(2)}x (requested: ${zoom.toStringAsFixed(2)}) ' 
+        'Zoom set to ${clamped.toStringAsFixed(2)}x (requested: ${zoom.toStringAsFixed(2)}) '
         '; deviceRange=[${minZoomFallback.toStringAsFixed(2)}..${maxZoomFallback.toStringAsFixed(2)}] '
         '; note=${zoom < minZoomFallback ? "requested < min, clamped" : "ok"}',
       );
-
     } catch (e) {
       _logger.warning(
         'Failed to set zoom level (requested: $zoom, clamped: $clamped, deviceRange=[$minZoomFallback..$maxZoomFallback]): $e',
       );
-
     }
   }
-
 
   Future<void> _tapToFocus() async {
     final controller = _controller;
@@ -413,7 +417,9 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage> {
       }
 
       final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
       );
 
       final lat = pos.latitude;
@@ -433,15 +439,13 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage> {
             p.administrativeArea,
             p.postalCode,
             p.country,
-          ]
-              .whereType<String>()
-              .where((s) => s.trim().isNotEmpty)
-              .join(', ');
+          ].whereType<String>().where((s) => s.trim().isNotEmpty).join(', ');
 
-          placeName = p.locality ?? p.subAdministrativeArea ?? p.administrativeArea;
+          placeName =
+              p.locality ?? p.subAdministrativeArea ?? p.administrativeArea;
         }
       } catch (e) {
-        _logger.error('Reverse geocoding failed', e is Object ? e : e.toString());
+        _logger.error('Reverse geocoding failed', e);
       }
 
       if (!mounted) return;
@@ -491,11 +495,7 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage> {
         await _handleVideoRecording(controller);
         break;
       case CameraMode.reporting:
-        // Usecase capture -> repository history, then show dialog (uses UI photo preview)
-        await _captureAndSyncUI(showSuccessSnackBar: false);
-        if (_lastPhoto != null) {
-          await _showReportingDialog(_lastPhoto!);
-        }
+        await _handleReportingCapture(controller);
         break;
     }
   }
@@ -507,7 +507,9 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Lokasi tidak tersedia. Coba refresh GPS terlebih dahulu.'),
+          content: Text(
+            'Lokasi tidak tersedia. Coba refresh GPS terlebih dahulu.',
+          ),
           backgroundColor: Colors.orange,
         ),
       );
@@ -515,7 +517,8 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage> {
     }
 
     final maps = 'https://www.google.com/maps?q=$_latitude,$_longitude';
-    final shareText = '''
+    final shareText =
+        '''
 📍 Lokasi Saya
 
 Nama Tempat: ${_meta.locationName}
@@ -575,7 +578,7 @@ Google Maps: $maps
         ),
       );
     } catch (e) {
-      _logger.error('Photo capture failed', e is Object ? e : e.toString());
+      _logger.error('Photo capture failed', e);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -611,7 +614,7 @@ Google Maps: $maps
         );
       }
     } catch (e) {
-      _logger.error('Video recording failed', e is Object ? e : e.toString());
+      _logger.error('Video recording failed', e);
       if (!mounted) return;
       setState(() => _isRecording = false);
     }
@@ -633,85 +636,158 @@ Google Maps: $maps
       );
 
       if (!mounted) return;
-      setState(() => _lastPhoto = photo);
+      setState(() {
+        _lastPhoto = photo;
+        _photoHistory.insert(0, photo);
+      });
 
-      await _showReportingDialog(photo);
+      final reportResult = await _showReportingDialog(photo);
+      if (reportResult == null) {
+        return;
+      }
+
+      final tracking = Tracking(
+        id: ref.read(idGeneratorProvider).generate(),
+        imagePath: photo.filePath,
+        latitude: photo.latitude ?? 0.0,
+        longitude: photo.longitude ?? 0.0,
+        address: photo.address ?? '',
+        accuracy: 0.0,
+        timestamp: photo.timestamp,
+        type: TrackingType.reporting,
+        reportInfo: ReportInfo(
+          category: reportResult.category,
+          note: reportResult.note,
+        ),
+      );
+
+      await ref.read(trackingRepositoryProvider).saveTracking(tracking);
+      ref.invalidate(trackingListProvider);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Laporan berhasil disimpan'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (e) {
-      _logger.error('Reporting capture failed', e is Object ? e : e.toString());
+      _logger.error('Reporting capture failed', e);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal menyimpan laporan: $e'),
+          backgroundColor: Colors.orange,
+        ),
+      );
     }
   }
 
-  Future<void> _showReportingDialog(CapturedPhoto photo) async {
+  Future<ReportFormResult?> _showReportingDialog(CapturedPhoto photo) async {
     final notesController = TextEditingController();
     String selectedCategory = 'Umum';
-    const categories = ['Umum', 'Infrastruktur', 'Lingkungan', 'Keamanan', 'Lainnya'];
+    const categories = [
+      'Umum',
+      'Infrastruktur',
+      'Lingkungan',
+      'Keamanan',
+      'Lainnya',
+    ];
 
-    await showDialog<void>(
+    return showDialog<ReportFormResult?>(
       context: context,
+      barrierDismissible: false,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
               backgroundColor: Colors.grey[900],
-              title: const Text('Form Laporan', style: TextStyle(color: Colors.white)),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.file(File(photo.filePath), height: 120, width: double.infinity, fit: BoxFit.cover),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Kategori', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      value: selectedCategory,
-                      dropdownColor: Colors.grey[800],
-                      style: const TextStyle(color: Colors.white),
-                      items: categories.map((cat) {
-                        return DropdownMenuItem(value: cat, child: Text(cat));
-                      }).toList(),
-                      onChanged: (value) {
-                        setDialogState(() => selectedCategory = value ?? 'Umum');
-                      },
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.grey[800],
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              title: const Text(
+                'Form Laporan',
+                style: TextStyle(color: Colors.white),
+              ),
+              content: SizedBox(
+                width: 380,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(
+                          File(photo.filePath),
+                          height: 120,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Catatan', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: notesController,
-                      maxLines: 4,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: 'Tulis catatan laporan...',
-                        hintStyle: const TextStyle(color: Colors.white38),
-                        filled: true,
-                        fillColor: Colors.grey[800],
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Kategori',
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        value: selectedCategory,
+                        dropdownColor: Colors.grey[800],
+                        style: const TextStyle(color: Colors.white),
+                        items: categories.map((cat) {
+                          return DropdownMenuItem(value: cat, child: Text(cat));
+                        }).toList(),
+                        onChanged: (value) {
+                          setDialogState(
+                            () => selectedCategory = value ?? 'Umum',
+                          );
+                        },
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: Colors.grey[800],
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Catatan',
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: notesController,
+                        maxLines: 4,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: 'Tulis catatan laporan...',
+                          hintStyle: const TextStyle(color: Colors.white38),
+                          filled: true,
+                          fillColor: Colors.grey[800],
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () => Navigator.of(context).pop(null),
                   child: const Text('Batal'),
                 ),
                 ElevatedButton(
                   onPressed: () {
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Laporan berhasil disimpan!'),
-                        backgroundColor: Colors.green,
+                    Navigator.of(context).pop(
+                      ReportFormResult(
+                        category: selectedCategory,
+                        note: notesController.text.trim().isEmpty
+                            ? null
+                            : notesController.text.trim(),
                       ),
                     );
                   },
@@ -751,11 +827,12 @@ Google Maps: https://www.google.com/maps?q=${photo.latitude ?? 0},${photo.longit
     final shareText = _buildShareText(photo);
 
     await showModalBottomSheet<void>(
-
       context: context,
       backgroundColor: Colors.grey[900],
       showDragHandle: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (context) {
         return SafeArea(
           child: Padding(
@@ -764,11 +841,13 @@ Google Maps: https://www.google.com/maps?q=${photo.latitude ?? 0},${photo.longit
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Bagikan',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                        )),
+                Text(
+                  'Bagikan',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
@@ -796,7 +875,9 @@ Google Maps: https://www.google.com/maps?q=${photo.latitude ?? 0},${photo.longit
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Bagikan foto: fitur share_plus belum diaktifkan'),
+                          content: Text(
+                            'Bagikan foto: fitur share_plus belum diaktifkan',
+                          ),
                         ),
                       );
                     },
@@ -809,9 +890,12 @@ Google Maps: https://www.google.com/maps?q=${photo.latitude ?? 0},${photo.longit
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Batal', style: TextStyle(color: Colors.white70)),
+                    child: const Text(
+                      'Batal',
+                      style: TextStyle(color: Colors.white70),
+                    ),
                   ),
-                )
+                ),
               ],
             ),
           ),
@@ -838,45 +922,71 @@ Google Maps: https://www.google.com/maps?q=${photo.latitude ?? 0},${photo.longit
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Overlay Elements',
-                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                    const Text(
+                      'Overlay Elements',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     SwitchListTile(
                       value: _overlayConfig.showAddress,
-                      title: const Text('Tampilkan alamat lengkap', style: TextStyle(color: Colors.white)),
+                      title: const Text(
+                        'Tampilkan alamat lengkap',
+                        style: TextStyle(color: Colors.white),
+                      ),
                       onChanged: (v) {
                         setModalState(() {
-                          _overlayConfig = _overlayConfig.copyWith(showAddress: v);
+                          _overlayConfig = _overlayConfig.copyWith(
+                            showAddress: v,
+                          );
                         });
                         setState(() {});
                       },
                     ),
                     SwitchListTile(
                       value: _overlayConfig.showCoordinates,
-                      title: const Text('Tampilkan koordinat', style: TextStyle(color: Colors.white)),
+                      title: const Text(
+                        'Tampilkan koordinat',
+                        style: TextStyle(color: Colors.white),
+                      ),
                       onChanged: (v) {
                         setModalState(() {
-                          _overlayConfig = _overlayConfig.copyWith(showCoordinates: v);
+                          _overlayConfig = _overlayConfig.copyWith(
+                            showCoordinates: v,
+                          );
                         });
                         setState(() {});
                       },
                     ),
                     SwitchListTile(
                       value: _overlayConfig.showTimestamp,
-                      title: const Text('Tampilkan timestamp', style: TextStyle(color: Colors.white)),
+                      title: const Text(
+                        'Tampilkan timestamp',
+                        style: TextStyle(color: Colors.white),
+                      ),
                       onChanged: (v) {
                         setModalState(() {
-                          _overlayConfig = _overlayConfig.copyWith(showTimestamp: v);
+                          _overlayConfig = _overlayConfig.copyWith(
+                            showTimestamp: v,
+                          );
                         });
                         setState(() {});
                       },
                     ),
                     SwitchListTile(
                       value: _overlayConfig.showMiniMap,
-                      title: const Text('Tampilkan mini map', style: TextStyle(color: Colors.white)),
+                      title: const Text(
+                        'Tampilkan mini map',
+                        style: TextStyle(color: Colors.white),
+                      ),
                       onChanged: (v) {
                         setModalState(() {
-                          _overlayConfig = _overlayConfig.copyWith(showMiniMap: v);
+                          _overlayConfig = _overlayConfig.copyWith(
+                            showMiniMap: v,
+                          );
                         });
                         setState(() {});
                       },
@@ -908,29 +1018,41 @@ Google Maps: https://www.google.com/maps?q=${photo.latitude ?? 0},${photo.longit
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Camera Settings', style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                'Camera Settings',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
               const SizedBox(height: 12),
               SwitchListTile(
-                title: const Text('Watermark', style: TextStyle(color: Colors.white)),
+                title: const Text(
+                  'Watermark',
+                  style: TextStyle(color: Colors.white),
+                ),
                 value: _isWatermarkOn,
-                activeColor: primary,
+                activeThumbColor: primary,
                 onChanged: (value) {
                   setState(() => _isWatermarkOn = value);
                 },
               ),
               SwitchListTile(
-                title: const Text('Flash', style: TextStyle(color: Colors.white)),
+                title: const Text(
+                  'Flash',
+                  style: TextStyle(color: Colors.white),
+                ),
                 value: _isFlashOn,
-                activeColor: primary,
+                activeThumbColor: primary,
                 onChanged: (value) async {
                   setState(() => _isFlashOn = value);
                   await _applyFlashStateSafely(_isFlashOn);
                 },
               ),
               SwitchListTile(
-                title: const Text('Grid', style: TextStyle(color: Colors.white)),
+                title: const Text(
+                  'Grid',
+                  style: TextStyle(color: Colors.white),
+                ),
                 value: _showGrid,
-                activeColor: primary,
+                activeThumbColor: primary,
                 onChanged: (value) {
                   setState(() => _showGrid = value);
                 },
@@ -944,212 +1066,212 @@ Google Maps: https://www.google.com/maps?q=${photo.latitude ?? 0},${photo.longit
   }
 
   @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    backgroundColor: Colors.black,
-    body: SafeArea(
-      child: FutureBuilder<void>(
-        future: _initializeControllerFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator.adaptive(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-            );
-          }
-
-          if (snapshot.hasError ||
-              _controller == null ||
-              !_controller!.value.isInitialized) {
-            final msg = snapshot.hasError ? snapshot.error.toString() : 'Camera not initialized';
-            _logger.error('Camera preview failed', msg);
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Text(
-                  'Failed to initialize camera.\n$msg',
-                  style: const TextStyle(color: Colors.white70),
-                  textAlign: TextAlign.center,
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: FutureBuilder<void>(
+          future: _initializeControllerFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: CircularProgressIndicator.adaptive(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
-              ),
-            );
-          }
+              );
+            }
 
-
-          final screenWidth = MediaQuery.of(context).size.width;
-          const targetAspect = 16 / 9;
-
-          return OrientationBuilder(
-            builder: (context, orientation) {
-              // Frame kamera ditaruh di area yang tersedia agar bisa fill layar.
-              // Gunakan height sisa setelah UI overlay (top bar + bottom bar + info overlay).
-              final double frameWidth = screenWidth;
-              final double frameHeight = MediaQuery.of(context).size.height - 56 - 64; // top bar + bottom bar
-              final double safeFrameHeight = frameHeight > 0 ? frameHeight : MediaQuery.of(context).size.height;
-
-
-              return Stack(
-                children: [
-                  Align(
-                    alignment: Alignment.topCenter,
-                    child: SizedBox(
-                      width: frameWidth,
-                      height: frameHeight,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: _tapToFocus,
-                        child: _buildCameraPreview(context),
-                      ),
-                    ),
+            if (snapshot.hasError ||
+                _controller == null ||
+                !_controller!.value.isInitialized) {
+              final msg = snapshot.hasError
+                  ? snapshot.error.toString()
+                  : 'Camera not initialized';
+              _logger.error('Camera preview failed', msg);
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    'Failed to initialize camera.\n$msg',
+                    style: const TextStyle(color: Colors.white70),
+                    textAlign: TextAlign.center,
                   ),
+                ),
+              );
+            }
 
-                  if (_showGrid)
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: CustomPaint(
-                          painter: GridPainter(),
-                        ),
-                      ),
-                    ),
+            final screenWidth = MediaQuery.of(context).size.width;
 
-                  if (_isRecording)
-                    Positioned(
-                      top: 16,
-                      left: 16,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: const [
-                            Icon(
-                              Icons.fiber_manual_record,
-                              color: Colors.white,
-                              size: 12,
-                            ),
-                            SizedBox(width: 6),
-                            Text(
-                              'REC',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
+            return OrientationBuilder(
+              builder: (context, orientation) {
+                // Frame kamera ditaruh di area yang tersedia agar bisa fill layar.
+                // Gunakan height sisa setelah UI overlay (top bar + bottom bar + info overlay).
+                final double frameWidth = screenWidth;
+                final double frameHeight =
+                    MediaQuery.of(context).size.height -
+                    56 -
+                    64; // top bar + bottom bar
+                final double safeFrameHeight = frameHeight > 0
+                    ? frameHeight
+                    : MediaQuery.of(context).size.height;
+
+                return Stack(
+                  children: [
+                    Align(
+                      alignment: Alignment.topCenter,
+                      child: SizedBox(
+                        width: frameWidth,
+                        height: safeFrameHeight,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _tapToFocus,
+                          child: _buildCameraPreview(context),
                         ),
                       ),
                     ),
 
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: _buildTopControlBar(context),
-                  ),
+                    if (_showGrid)
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: CustomPaint(painter: GridPainter()),
+                        ),
+                      ),
 
-                  Positioned(
-                    left: 16,
-                    right: 16,
-                    bottom: 180,
-                    child: _InfoOverlay(
-                      meta: _meta,
-                      config: _overlayConfig,
-                      lastLocationUpdateTime: _lastLocationUpdateTime,
-                      isLoading: _locationLoading,
-                    ),
-                  ),
-
-                  Positioned(
-                    top: 72,
-                    left: 16,
-                    right: 16,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: IgnorePointer(
-                        ignoring: false,
+                    if (_isRecording)
+                      Positioned(
+                        top: 16,
+                        left: 16,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
+                            horizontal: 12,
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.55),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.08),
-                            ),
+                            color: Colors.red,
+                            borderRadius: BorderRadius.circular(20),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
-                            children: [
-                              for (final z in _zoomPresets)
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                  ),
-                                  child: InkWell(
-                                    onTap: () => _applyZoom(z),
-                                    borderRadius: BorderRadius.circular(10),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: (z - _zoomLevel).abs() < 0.01
-                                            ? Colors.blue.withOpacity(0.25)
-                                            : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(
-                                          color:
-                                              (z - _zoomLevel).abs() < 0.01
-                                                  ? Colors.blue.withOpacity(0.7)
-                                                  : Colors.white.withOpacity(
-                                                      0.10,
-                                                    ),
-                                        ),
-                                      ),
-                                      child: Text(
-                                        '${z.toStringAsFixed(z == 1.0 ? 0 : 1)}x',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
+                            children: const [
+                              Icon(
+                                Icons.fiber_manual_record,
+                                color: Colors.white,
+                                size: 12,
+                              ),
+                              SizedBox(width: 6),
+                              Text(
+                                'REC',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
                                 ),
+                              ),
                             ],
                           ),
                         ),
                       ),
-                    ),
-                  ),
 
-                  Align(
-                    alignment: Alignment.bottomCenter,
-                    child: SafeArea(
-                      top: false,
-                      child: _buildBottomSection(),
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: _buildTopControlBar(context),
                     ),
-                  ),
-                ],
-              );
-            },
-          );
-        },
+
+                    Positioned(
+                      left: 16,
+                      right: 16,
+                      bottom: 180,
+                      child: _InfoOverlay(
+                        meta: _meta,
+                        config: _overlayConfig,
+                        lastLocationUpdateTime: _lastLocationUpdateTime,
+                        isLoading: _locationLoading,
+                      ),
+                    ),
+
+                    Positioned(
+                      top: 72,
+                      left: 16,
+                      right: 16,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: IgnorePointer(
+                          ignoring: false,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.55),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.08),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                for (final z in _zoomPresets)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                    ),
+                                    child: InkWell(
+                                      onTap: () => _applyZoom(z),
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: (z - _zoomLevel).abs() < 0.01
+                                              ? Colors.blue.withOpacity(0.25)
+                                              : Colors.transparent,
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                          border: Border.all(
+                                            color: (z - _zoomLevel).abs() < 0.01
+                                                ? Colors.blue.withOpacity(0.7)
+                                                : Colors.white.withOpacity(
+                                                    0.10,
+                                                  ),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '${z.toStringAsFixed(z == 1.0 ? 0 : 1)}x',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: SafeArea(top: false, child: _buildBottomSection()),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildBottomSection() {
     return Column(
@@ -1192,14 +1314,21 @@ Widget build(BuildContext context) {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _TopIconButton(icon: Icons.close, tooltip: 'Tutup kamera', onPressed: () => Navigator.of(context).maybePop()),
+          _TopIconButton(
+            icon: Icons.close,
+            tooltip: 'Tutup kamera',
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               _TopIconButton(
-                icon: _isWatermarkOn ? Icons.water_drop : Icons.water_drop_outlined,
+                icon: _isWatermarkOn
+                    ? Icons.water_drop
+                    : Icons.water_drop_outlined,
                 tooltip: 'Toggle watermark',
-                onPressed: () => setState(() => _isWatermarkOn = !_isWatermarkOn),
+                onPressed: () =>
+                    setState(() => _isWatermarkOn = !_isWatermarkOn),
               ),
               const SizedBox(width: 10),
               _TopIconButton(
@@ -1211,19 +1340,39 @@ Widget build(BuildContext context) {
                 },
               ),
               const SizedBox(width: 10),
-              _TopIconButton(icon: Icons.grid_on, tooltip: 'Toggle grid', onPressed: () => setState(() => _showGrid = !_showGrid)),
+              _TopIconButton(
+                icon: Icons.grid_on,
+                tooltip: 'Toggle grid',
+                onPressed: () => setState(() => _showGrid = !_showGrid),
+              ),
               const SizedBox(width: 10),
-              _TopIconButton(icon: Icons.layers, tooltip: 'Overlay / Templates', onPressed: _onOpenTemplates),
+              _TopIconButton(
+                icon: Icons.layers,
+                tooltip: 'Overlay / Templates',
+                onPressed: _onOpenTemplates,
+              ),
             ],
           ),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              _TopIconButton(icon: Icons.my_location, tooltip: 'Refetch lokasi', onPressed: () => _refreshLocationData(showLoading: true)),
+              _TopIconButton(
+                icon: Icons.my_location,
+                tooltip: 'Refetch lokasi',
+                onPressed: () => _refreshLocationData(showLoading: true),
+              ),
               const SizedBox(width: 10),
-              _TopIconButton(icon: Icons.rotate_right, tooltip: 'Rotate camera', onPressed: _switchCamera),
+              _TopIconButton(
+                icon: Icons.rotate_right,
+                tooltip: 'Rotate camera',
+                onPressed: _switchCamera,
+              ),
               const SizedBox(width: 10),
-              _TopIconButton(icon: Icons.settings, tooltip: 'Settings', onPressed: _onOpenSettings),
+              _TopIconButton(
+                icon: Icons.settings,
+                tooltip: 'Settings',
+                onPressed: _onOpenSettings,
+              ),
             ],
           ),
         ],
@@ -1300,7 +1449,11 @@ class _InfoOverlay extends StatelessWidget {
           if (config.showTimestamp)
             Text(
               ts,
-              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           if (config.showAddress) ...[
             const SizedBox(height: 8),
@@ -1321,7 +1474,10 @@ class _InfoOverlay extends StatelessWidget {
               'Lat,Lng: ${meta.coordinates}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12),
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 12,
+              ),
             ),
           ],
           if (config.showMiniMap) ...[
@@ -1367,10 +1523,42 @@ class _BottomModeSelector extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
             children: [
-              Expanded(child: _ModeItem(mode: CameraMode.locationShare, selectedMode: selectedMode, icon: Icons.share_location, label: 'Location Share', onTap: () => onModeChanged(CameraMode.locationShare))),
-              Expanded(child: _ModeItem(mode: CameraMode.photo, selectedMode: selectedMode, icon: Icons.photo_camera, label: 'Photo', onTap: () => onModeChanged(CameraMode.photo))),
-              Expanded(child: _ModeItem(mode: CameraMode.video, selectedMode: selectedMode, icon: Icons.videocam, label: 'Video', onTap: () => onModeChanged(CameraMode.video))),
-              Expanded(child: _ModeItem(mode: CameraMode.reporting, selectedMode: selectedMode, icon: Icons.description, label: 'Reporting', onTap: () => onModeChanged(CameraMode.reporting))),
+              Expanded(
+                child: _ModeItem(
+                  mode: CameraMode.locationShare,
+                  selectedMode: selectedMode,
+                  icon: Icons.share_location,
+                  label: 'Location Share',
+                  onTap: () => onModeChanged(CameraMode.locationShare),
+                ),
+              ),
+              Expanded(
+                child: _ModeItem(
+                  mode: CameraMode.photo,
+                  selectedMode: selectedMode,
+                  icon: Icons.photo_camera,
+                  label: 'Photo',
+                  onTap: () => onModeChanged(CameraMode.photo),
+                ),
+              ),
+              Expanded(
+                child: _ModeItem(
+                  mode: CameraMode.video,
+                  selectedMode: selectedMode,
+                  icon: Icons.videocam,
+                  label: 'Video',
+                  onTap: () => onModeChanged(CameraMode.video),
+                ),
+              ),
+              Expanded(
+                child: _ModeItem(
+                  mode: CameraMode.reporting,
+                  selectedMode: selectedMode,
+                  icon: Icons.description,
+                  label: 'Reporting',
+                  onTap: () => onModeChanged(CameraMode.reporting),
+                ),
+              ),
             ],
           ),
         ),
@@ -1468,32 +1656,9 @@ class _BottomActionBar extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: GestureDetector(
                 onTap: () {
-                  if (lastPhoto == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Belum ada riwayat foto tracking'),
-                        backgroundColor: Colors.orange,
-                      ),
-                    );
-                    return;
-                  }
-
                   Navigator.pushNamed(context, AppRoutes.history);
                 },
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Container(
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.2),
-                      border: Border.all(color: Colors.white.withOpacity(0.18)),
-                    ),
-                    child: lastPhoto == null
-                        ? const Icon(Icons.image, color: Colors.white54, size: 20)
-                        : Image.file(File(lastPhoto!.filePath), fit: BoxFit.cover),
-                  ),
-                ),
+                child: _buildHistoryThumbnail(context),
               ),
             ),
           ),
@@ -1513,8 +1678,13 @@ class _BottomActionBar extends StatelessWidget {
                   child: Container(
                     margin: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      shape: selectedMode == CameraMode.video && isRecording ? BoxShape.rectangle : BoxShape.circle,
-                      borderRadius: selectedMode == CameraMode.video && isRecording ? BorderRadius.circular(6) : null,
+                      shape: selectedMode == CameraMode.video && isRecording
+                          ? BoxShape.rectangle
+                          : BoxShape.circle,
+                      borderRadius:
+                          selectedMode == CameraMode.video && isRecording
+                          ? BorderRadius.circular(6)
+                          : null,
                       color: shutterColor,
                     ),
                   ),
@@ -1528,7 +1698,13 @@ class _BottomActionBar extends StatelessWidget {
               child: TextButton.icon(
                 onPressed: onOpenTemplates,
                 icon: const Icon(Icons.layers, color: Colors.white),
-                label: const Text('Template', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                label: const Text(
+                  'Template',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 style: TextButton.styleFrom(
                   backgroundColor: Colors.black.withOpacity(0.25),
                   shape: RoundedRectangleBorder(
@@ -1540,6 +1716,52 @@ class _BottomActionBar extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Build thumbnail widget untuk history page.
+  ///
+  /// Behavior:
+  /// - Jika lastPhoto ada → tampilkan thumbnail gambar
+  /// - Jika lastPhoto null → tampilkan placeholder icon + teks
+  ///
+  /// Perilaku tap SELALU sama: buka HistoryPage tanpa guard
+  /// HistoryPage sendiri menangani empty state jika tidak ada data
+  Widget _buildHistoryThumbnail(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        width: 46,
+        height: 46,
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.2),
+          border: Border.all(color: Colors.white.withOpacity(0.18)),
+        ),
+        child: lastPhoto == null
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(
+                      Icons.photo_library_outlined,
+                      color: Colors.white54,
+                      size: 18,
+                    ),
+                  ],
+                ),
+              )
+            : Image.file(
+                File(lastPhoto!.filePath),
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return const Icon(
+                    Icons.image,
+                    color: Colors.white54,
+                    size: 18,
+                  );
+                },
+              ),
       ),
     );
   }
@@ -1585,13 +1807,28 @@ class GridPainter extends CustomPainter {
       ..color = Colors.white.withOpacity(0.5)
       ..strokeWidth = 1.0;
 
-    canvas.drawLine(Offset(size.width / 3, 0), Offset(size.width / 3, size.height), paint);
-    canvas.drawLine(Offset(2 * size.width / 3, 0), Offset(2 * size.width / 3, size.height), paint);
-    canvas.drawLine(Offset(0, size.height / 3), Offset(size.width, size.height / 3), paint);
-    canvas.drawLine(Offset(0, 2 * size.height / 3), Offset(size.width, 2 * size.height / 3), paint);
+    canvas.drawLine(
+      Offset(size.width / 3, 0),
+      Offset(size.width / 3, size.height),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(2 * size.width / 3, 0),
+      Offset(2 * size.width / 3, size.height),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(0, size.height / 3),
+      Offset(size.width, size.height / 3),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(0, 2 * size.height / 3),
+      Offset(size.width, 2 * size.height / 3),
+      paint,
+    );
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-

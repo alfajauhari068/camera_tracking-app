@@ -234,7 +234,7 @@ class TrackingDetailPage extends StatelessWidget {
               child: Container(
                 color: const Color(0xFF2c2c2c),
                 child: _effectiveData.imagePath != null
-                    ? Image.network(_effectiveData.imagePath!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _buildPhotoPlaceholder())
+                    ? Image.network(_effectiveData.imagePath!, fit: BoxFit.cover, errorBuilder: (_, _, _) => _buildPhotoPlaceholder())
                     : _buildPhotoPlaceholder(),
               ),
             ),

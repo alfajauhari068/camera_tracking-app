@@ -8,6 +8,9 @@ class HistoryItem {
   final double? latitude;
   final double? longitude;
   final String? imagePath;
+  final bool isReporting;
+  final String? reportCategory;
+  final String? reportSeverity;
 
   const HistoryItem({
     required this.id,
@@ -17,6 +20,9 @@ class HistoryItem {
     this.latitude,
     this.longitude,
     this.imagePath,
+    this.isReporting = false,
+    this.reportCategory,
+    this.reportSeverity,
   });
 
   /// Format waktu untuk display

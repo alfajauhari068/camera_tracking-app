@@ -3,11 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/entities/tracking.dart';
 import '../../domain/usecases/export_trackings.dart';
-import '../../domain/services/export_service.dart';
-import '../../domain/usecases/export_trackings.dart';
-
 import '../providers.dart';
-
 
 /// EXPORT PAGE
 ///
@@ -59,7 +55,12 @@ class _ExportPageState extends ConsumerState<ExportPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Export Data'), elevation: 0),
+      backgroundColor: const Color(0xFF121212),
+      appBar: AppBar(
+        title: const Text('Export Data'),
+        backgroundColor: const Color(0xFF1a237e),
+        elevation: 0,
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -92,7 +93,11 @@ class _ExportPageState extends ConsumerState<ExportPage> {
 
             const Text(
               'Select Date Range',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
             ),
 
             const SizedBox(height: 12),
@@ -105,12 +110,17 @@ class _ExportPageState extends ConsumerState<ExportPage> {
                     child: InputDecorator(
                       decoration: InputDecoration(
                         labelText: 'Start Date',
+                        labelStyle: const TextStyle(color: Colors.white70),
+                        filled: true,
+                        fillColor: const Color(0xFF2c2c2c),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
                         ),
                       ),
                       child: Text(
                         _startDate?.toString().split(' ')[0] ?? 'Select',
+                        style: const TextStyle(color: Colors.white70),
                       ),
                     ),
                   ),
@@ -122,12 +132,17 @@ class _ExportPageState extends ConsumerState<ExportPage> {
                     child: InputDecorator(
                       decoration: InputDecoration(
                         labelText: 'End Date',
+                        labelStyle: const TextStyle(color: Colors.white70),
+                        filled: true,
+                        fillColor: const Color(0xFF2c2c2c),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
                         ),
                       ),
                       child: Text(
                         _endDate?.toString().split(' ')[0] ?? 'Select',
+                        style: const TextStyle(color: Colors.white70),
                       ),
                     ),
                   ),
@@ -145,13 +160,19 @@ class _ExportPageState extends ConsumerState<ExportPage> {
             const SizedBox(height: 12),
 
             DropdownButtonFormField<String>(
-              value: _selectedFormat,
+              initialValue: _selectedFormat,
               decoration: InputDecoration(
+                filled: true,
+                fillColor: const Color(0xFF2c2c2c),
+                labelStyle: const TextStyle(color: Colors.white70),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
                 ),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12),
               ),
+              dropdownColor: const Color(0xFF1e1e1e),
+              style: const TextStyle(color: Colors.white),
               items: ['CSV', 'XLSX', 'PDF', 'JSON'].map((format) {
                 return DropdownMenuItem(value: format, child: Text(format));
               }).toList(),
@@ -184,8 +205,8 @@ class _ExportPageState extends ConsumerState<ExportPage> {
             if (_exportStatus != null)
               Card(
                 color: _exportStatus!.contains('berhasil')
-                    ? Colors.green[50]
-                    : Colors.red[50],
+                    ? const Color(0xFF1B5E20)
+                    : const Color(0xFFB71C1C),
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Row(
@@ -194,15 +215,16 @@ class _ExportPageState extends ConsumerState<ExportPage> {
                         _exportStatus!.contains('berhasil')
                             ? Icons.check_circle
                             : Icons.error,
-                        color: _exportStatus!.contains('berhasil')
-                            ? Colors.green
-                            : Colors.red,
+                        color: Colors.white,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           _exportStatus!,
-                          style: const TextStyle(fontSize: 12),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ],
@@ -263,7 +285,6 @@ class _ExportPageState extends ConsumerState<ExportPage> {
         exportService: exportService,
       );
       final exportPath = await exporter.execute(
-
         startDate: _startDate,
         endDate: _endDate,
         format: _selectedFormat,

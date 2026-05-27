@@ -5,7 +5,6 @@ import 'features/tracking/presentation/pages/gallery_page.dart';
 import 'features/tracking/presentation/pages/photo_detail_page.dart';
 import 'features/tracking/presentation/pages/map_page.dart';
 import 'features/tracking/presentation/pages/export_page.dart';
-import 'features/tracking/presentation/pages/home_page.dart';
 import 'features/tracking/presentation/pages/camera_tracking_page.dart';
 import 'features/tracking/presentation/pages/history_page.dart';
 import 'features/tracking/presentation/pages/tracking_detail_page.dart';

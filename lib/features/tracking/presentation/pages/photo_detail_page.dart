@@ -7,6 +7,8 @@ import 'package:share_plus/share_plus.dart';
 import '../../../../routes.dart' as app_routes;
 import '../../domain/entities/tracking.dart';
 import '../providers.dart';
+import '../tracking_providers.dart';
+import '../widgets/report_badge.dart';
 
 /// PHOTO DETAIL PAGE
 ///
@@ -140,6 +142,9 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
     }
 
     final tracking = _tracking!;
+    final isReporting = tracking.type == TrackingType.reporting;
+    final reportInfo = tracking.reportInfo;
+    final theme = Theme.of(context);
 
     // =========================================================================
     // DISPLAY STATE
@@ -170,6 +175,11 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (isReporting) ...[
+                    const ReportBadge(),
+                    const SizedBox(height: 16),
+                  ],
+
                   // Tanggal & Waktu
                   _MetadataCard(
                     icon: Icons.access_time,
@@ -214,6 +224,32 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
                     value: tracking.id,
                   ),
 
+                  if (isReporting && reportInfo != null) ...[
+                    const SizedBox(height: 16),
+                    Text('Detail Laporan', style: theme.textTheme.titleMedium),
+                    const SizedBox(height: 8),
+                    Text('Kategori laporan', style: theme.textTheme.labelMedium),
+                    const SizedBox(height: 4),
+                    Text(reportInfo.category, style: theme.textTheme.bodyMedium),
+                    if (reportInfo.severity?.isNotEmpty == true) ...[
+                      const SizedBox(height: 12),
+                      Text('Tingkat keparahan', style: theme.textTheme.labelMedium),
+                      const SizedBox(height: 4),
+                      Text(
+                        _readableSeverity(reportInfo.severity),
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Text('Catatan', style: theme.textTheme.labelMedium),
+                    const SizedBox(height: 4),
+                    Text(
+                      reportInfo.note?.isNotEmpty == true ? reportInfo.note! : '-',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
                   const SizedBox(height: 24),
 
                   // ===================================================================
@@ -249,6 +285,22 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
               ),
             ),
           ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () => _deleteTracking(context, tracking),
+            icon: const Icon(Icons.delete_outline),
+            label: const Text('Hapus Foto'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+          ),
         ),
       ),
     );
@@ -310,15 +362,63 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
     );
   }
 
+  Future<void> _deleteTracking(BuildContext context, Tracking tracking) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus foto?'),
+        content: const Text('Tindakan ini akan menghapus foto dan data tracking terkait.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await ref.read(trackingRepositoryProvider).deleteTracking(tracking.id);
+      ref.invalidate(trackingListProvider);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Foto berhasil dihapus'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal menghapus foto: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   /// Share tracking data dengan foto dan link Google Maps
   void _shareTracking(BuildContext context, Tracking tracking) {
     final googleMapsUrl =
         'https://www.google.com/maps/place/${tracking.latitude},${tracking.longitude}';
 
-    final shareText =
-        '''
-📍 Lokasi Tracking GPS
-
+    final baseText = '''
 Alamat: ${tracking.address}
 Koordinat: ${tracking.latitude.toStringAsFixed(6)}, ${tracking.longitude.toStringAsFixed(6)}
 Akurasi: ${tracking.accuracy.toStringAsFixed(2)} meter
@@ -327,9 +427,38 @@ Waktu: ${_formatDateTime(tracking.timestamp)}
 Lihat di Google Maps: $googleMapsUrl
 ''';
 
+    final severityText = tracking.reportInfo?.severity;
+    final severityLine = severityText?.isNotEmpty == true
+        ? 'Tingkat keparahan: ${_readableSeverity(severityText)}\n'
+        : '';
+
+    final shareText = tracking.type == TrackingType.reporting &&
+            tracking.reportInfo != null
+        ? 'Laporan lapangan:\n'
+            'Kategori: ${tracking.reportInfo!.category}\n'
+            '$severityLine'
+            'Catatan: ${tracking.reportInfo!.note ?? '-'}\n'
+            '$baseText'
+        : 'Foto dokumentasi:\n$baseText';
+
     // Share foto bersama dengan pesan teks
     final imageFile = XFile(tracking.imagePath);
     Share.shareXFiles([imageFile], text: shareText);
+  }
+
+  String _readableSeverity(String? severity) {
+    if (severity == null || severity.isEmpty) return '-';
+
+    switch (severity.toLowerCase()) {
+      case 'low':
+        return 'Rendah';
+      case 'medium':
+        return 'Sedang';
+      case 'high':
+        return 'Tinggi';
+      default:
+        return severity[0].toUpperCase() + severity.substring(1);
+    }
   }
 
   /// Format DateTime untuk display

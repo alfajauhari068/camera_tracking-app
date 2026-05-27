@@ -3,7 +3,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../../domain/entities/tracking.dart';
 import '../tracking_providers.dart';
 import '../widgets/map_thumbnail_card.dart';
 
@@ -30,8 +29,27 @@ class _MapPageState extends ConsumerState<MapPage> {
     final userLocationAsync = ref.watch(userLocationProvider);
     final selectedTracking = ref.watch(selectedTrackingProvider).tracking;
 
+    final selectedTitle = selectedTracking != null
+        ? 'Map View - ${selectedTracking.address.split(',').first}'
+        : 'Map View';
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Map View')),
+      backgroundColor: const Color(0xFF121212),
+      appBar: AppBar(
+        title: Text(selectedTitle),
+        backgroundColor: const Color(0xFF1a237e),
+        elevation: 0,
+        actions: [
+          if (selectedTracking != null)
+            IconButton(
+              tooltip: 'Clear selection',
+              icon: const Icon(Icons.close),
+              onPressed: () {
+                ref.read(selectedTrackingProvider.notifier).clearSelection();
+              },
+            ),
+        ],
+      ),
       body: trackingListAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stack) => Center(
@@ -40,6 +58,7 @@ class _MapPageState extends ConsumerState<MapPage> {
             child: Text(
               'Error loading tracking data:\n$error',
               textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70),
             ),
           ),
         ),
@@ -49,8 +68,9 @@ class _MapPageState extends ConsumerState<MapPage> {
               child: Padding(
                 padding: EdgeInsets.all(24),
                 child: Text(
-                  'No tracking data available.\nPlease capture a photo first.',
+                  'Belum ada data tracking. Ambil foto terlebih dahulu untuk melihat peta.',
                   textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70),
                 ),
               ),
             );

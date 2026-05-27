@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,7 +8,7 @@ import '../../domain/entities/history_item.dart';
 import '../../domain/entities/tracking.dart';
 import '../providers.dart';
 import '../tracking_providers.dart';
-
+import '../widgets/report_badge.dart';
 
 /// =============================================================================
 /// HISTORY PAGE - Daftar Tracking Log
@@ -26,19 +28,17 @@ class HistoryPage extends ConsumerStatefulWidget {
 }
 
 class _HistoryPageState extends ConsumerState<HistoryPage> {
-
   // Referensi provider repository sudah disediakan lewat ../providers.dart
 
   // Search & filter state
   String _searchQuery = '';
   DateTime? _selectedDate;
+  bool _showReportsOnly = false;
 
   /// Selection untuk delete
+  bool _selectionMode = false;
   final Set<String> _selectedIds = <String>{};
 
-  bool get _isSelectionMode => _selectedIds.isNotEmpty;
-
-  // Convert domain Tracking list to HistoryItem list with mapping for existing UI.
   List<HistoryItem> _mapToHistoryItems(List<Tracking> trackings) {
     return trackings.map((t) {
       return HistoryItem(
@@ -47,10 +47,13 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
         locationSummary: t.address.isNotEmpty
             ? t.address
             : '${t.latitude}, ${t.longitude}',
-        status: HistoryStatus.snapshot, // default; UI hanya butuh badge
+        status: HistoryStatus.snapshot,
         latitude: t.latitude,
         longitude: t.longitude,
         imagePath: t.imagePath,
+        isReporting: t.type == TrackingType.reporting,
+        reportCategory: t.reportInfo?.category,
+          reportSeverity: t.reportInfo?.severity,
       );
     }).toList();
   }
@@ -58,7 +61,6 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
   List<HistoryItem> _filterItems(List<HistoryItem> items) {
     var filtered = items;
 
-    // Filter by search query
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
       filtered = filtered.where((item) {
@@ -66,7 +68,6 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
       }).toList();
     }
 
-    // Filter by date
     if (_selectedDate != null) {
       filtered = filtered.where((item) {
         return item.timestamp.year == _selectedDate!.year &&
@@ -75,9 +76,11 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
       }).toList();
     }
 
-    // Sort by timestamp descending (newest first)
-    filtered.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    if (_showReportsOnly) {
+      filtered = filtered.where((item) => item.isReporting).toList();
+    }
 
+    filtered.sort((a, b) => b.timestamp.compareTo(a.timestamp));
     return filtered;
   }
 
@@ -86,27 +89,19 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
     final trackingListAsync = ref.watch(trackingListProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121212), // Dark background
-      appBar: AppBar(
-        title: const Text('History'),
-        backgroundColor: const Color(0xFF1a237e), // Navy
-        elevation: 0,
-      ),
+      backgroundColor: const Color(0xFF121212),
+      appBar: _buildAppBar(),
       body: Column(
         children: [
-          if (_isSelectionMode)
-            _buildSelectionToolbar(),
           _buildFilterArea(),
           Expanded(
-
             child: trackingListAsync.when(
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
-              error: (e, st) => Center(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, stack) => Center(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Text(
-                    'Failed to load history\n$e',
+                    'Gagal memuat history\n$error',
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.white70),
                   ),
@@ -115,12 +110,7 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
               data: (trackings) {
                 final allItems = _mapToHistoryItems(trackings);
                 final filteredItems = _filterItems(allItems);
-
-                if (filteredItems.isEmpty) {
-                  return _buildEmptyState();
-                }
-
-                return _buildHistoryList(filteredItems);
+                return _buildBody(filteredItems);
               },
             ),
           ),
@@ -129,17 +119,29 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
     );
   }
 
-  // =========================================================================
-  // FILTER AREA
-  // =========================================================================
+  Widget _buildBody(List<HistoryItem> items) {
+    if (items.isEmpty) {
+      if (_selectionMode) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          setState(() {
+            _selectionMode = false;
+            _selectedIds.clear();
+          });
+        });
+      }
+      return _buildEmptyState();
+    }
+
+    return _buildHistoryList(items);
+  }
 
   Widget _buildFilterArea() {
     return Container(
       padding: const EdgeInsets.all(12),
-      color: const Color(0xFF1e1e1e), // Dark grey
+      color: const Color(0xFF1e1e1e),
       child: Column(
         children: [
-          // Row: Search Bar
           TextField(
             decoration: InputDecoration(
               hintText: 'Cari lokasi...',
@@ -157,20 +159,14 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide.none,
               ),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
             ),
             style: const TextStyle(color: Colors.white),
-            onChanged: (value) =>
-                setState(() => _searchQuery = value),
+            onChanged: (value) => setState(() => _searchQuery = value),
           ),
-
           const SizedBox(height: 8),
-
-          // Row: Date Filter + Clear Filter
           Row(
             children: [
-              // Date Picker Button
               OutlinedButton.icon(
                 onPressed: _pickDate,
                 icon: const Icon(Icons.calendar_today, size: 16),
@@ -188,11 +184,21 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                   ),
                 ),
               ),
-
               const SizedBox(width: 8),
-
-              // Clear Filter
-              if (_selectedDate != null || _searchQuery.isNotEmpty)
+              FilterChip(
+                label: const Text('Hanya Laporan'),
+                selected: _showReportsOnly,
+                selectedColor: Colors.orangeAccent.withOpacity(0.2),
+                backgroundColor: const Color(0xFF2c2c2c),
+                labelStyle: TextStyle(
+                  color: _showReportsOnly ? Colors.orangeAccent : Colors.white70,
+                ),
+                onSelected: (selected) {
+                  setState(() => _showReportsOnly = selected);
+                },
+              ),
+              const Spacer(),
+              if (_selectedDate != null || _searchQuery.isNotEmpty || _showReportsOnly)
                 TextButton(
                   onPressed: _clearFilters,
                   child: const Text(
@@ -200,16 +206,10 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                     style: TextStyle(color: Color(0xFF00e676)),
                   ),
                 ),
-
               const Spacer(),
-
-              // Item count Placeholder (bisa diisi nanti)
               Text(
                 ' ',
-                style: TextStyle(
-                  color: Colors.grey[500],
-                  fontSize: 12,
-                ),
+                style: TextStyle(color: Colors.grey[500], fontSize: 12),
               ),
             ],
           ),
@@ -217,10 +217,6 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
       ),
     );
   }
-
-  // =========================================================================
-  // HISTORY LIST
-  // =========================================================================
 
   Widget _buildHistoryList(List<HistoryItem> items) {
     return ListView.builder(
@@ -233,58 +229,76 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
         return _HistoryListItem(
           item: item,
           isSelected: isSelected,
-          selectionMode: _isSelectionMode,
-          onTap: () {
-            if (_isSelectionMode) {
-              setState(() {
-                if (isSelected) {
-                  _selectedIds.remove(item.id);
-                } else {
-                  _selectedIds.add(item.id);
-                }
-              });
-              return;
-            }
-            _showItemDetail(item);
-          },
-          onLongPress: () {
-            setState(() {
-              _selectedIds.add(item.id);
-            });
-          },
+          selectionMode: _selectionMode,
+          onTap: () => _onItemTap(item),
+          onLongPress: () => _onItemLongPress(item),
         );
       },
     );
   }
 
-  // =========================================================================
-  // EMPTY STATE
-  // =========================================================================
-
   Widget _buildEmptyState() {
     return Center(
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.history, size: 64, color: Colors.grey[600]),
-          const SizedBox(height: 16),
-          Text(
-            _searchQuery.isEmpty && _selectedDate == null
-                ? 'Belum ada history'
-                : 'Tidak ada hasil',
+          const Icon(
+            Icons.photo_library_outlined,
+            size: 48,
+            color: Colors.white70,
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Belum ada riwayat foto',
             style: TextStyle(
-              color: Colors.grey[500],
+              color: Colors.white,
               fontSize: 16,
+              fontWeight: FontWeight.w600,
             ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Ambil foto terlebih dahulu untuk melihat tracking di sini.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white60),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.camera_alt_outlined),
+            label: const Text('Buka Kamera'),
+            onPressed: () {
+              Navigator.pushNamed(context, AppRoutes.camera);
+            },
           ),
         ],
       ),
     );
   }
 
-  // =========================================================================
-  // ACTIONS
-  // =========================================================================
+  void _onItemTap(HistoryItem item) {
+    if (_selectionMode) {
+      setState(() {
+        if (_selectedIds.contains(item.id)) {
+          _selectedIds.remove(item.id);
+        } else {
+          _selectedIds.add(item.id);
+        }
+        if (_selectedIds.isEmpty) {
+          _selectionMode = false;
+        }
+      });
+      return;
+    }
+
+    _showItemDetail(item);
+  }
+
+  void _onItemLongPress(HistoryItem item) {
+    setState(() {
+      _selectionMode = true;
+      _selectedIds.add(item.id);
+    });
+  }
 
   Future<void> _pickDate() async {
     final date = await showDatePicker(
@@ -314,75 +328,80 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
     setState(() {
       _searchQuery = '';
       _selectedDate = null;
+      _showReportsOnly = false;
     });
   }
 
-  Widget _buildSelectionToolbar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      color: const Color(0xFF1a237e),
-      child: Row(
-        children: [
-          Text(
-            '${_selectedIds.length} dipilih',
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+  AppBar _buildAppBar() {
+    if (!_selectionMode) {
+      return AppBar(
+        title: const Text('History'),
+        backgroundColor: const Color(0xFF1a237e),
+        elevation: 0,
+      );
+    }
+
+    return AppBar(
+      leading: IconButton(
+        tooltip: 'Batal',
+        icon: const Icon(Icons.close),
+        onPressed: _exitSelectionMode,
+      ),
+      title: Text('${_selectedIds.length} terpilih'),
+      actions: [
+        IconButton(
+          tooltip: 'Hapus',
+          icon: const Icon(Icons.delete_outline),
+          onPressed: _deleteSelected,
+        ),
+      ],
+      backgroundColor: const Color(0xFF1a237e),
+      elevation: 0,
+    );
+  }
+
+  void _exitSelectionMode() {
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  Future<void> _deleteSelected() async {
+    final idsToDelete = _selectedIds.toList(growable: false);
+    if (idsToDelete.isEmpty) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Hapus ${idsToDelete.length} foto?'),
+        content: const Text('Tindakan ini tidak dapat dibatalkan.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Batal'),
           ),
-          const Spacer(),
-          IconButton(
-            tooltip: 'Batal',
-            icon: const Icon(Icons.close, color: Colors.white),
-            onPressed: () {
-              setState(() => _selectedIds.clear());
-            },
-          ),
-          const SizedBox(width: 4),
-          IconButton(
-            tooltip: 'Hapus',
-            icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
-            onPressed: _deleteSelected,
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Hapus'),
           ),
         ],
       ),
     );
-  }
 
+    if (confirmed != true) return;
 
-  Future<void> _deleteSelected() async {
     try {
-      final ids = _selectedIds.toList(growable: false);
-      if (ids.isEmpty) return;
-
-      // konfirmasi sederhana
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Hapus data'),
-          content: Text('Hapus ${ids.length} foto/tracking yang dipilih?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Batal'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-              ),
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Hapus'),
-            ),
-          ],
-        ),
-      );
-
-      if (confirmed != true) return;
-
       final repo = ref.read(trackingRepositoryProvider);
-      for (final id in ids) {
+      for (final id in idsToDelete) {
         await repo.deleteTracking(id);
       }
 
       if (!mounted) return;
-      setState(() => _selectedIds.clear());
+      setState(() {
+        _selectionMode = false;
+        _selectedIds.clear();
+      });
       ref.invalidate(trackingListProvider);
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -402,17 +421,9 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
     }
   }
 
-
   void _showItemDetail(HistoryItem item) {
-    // We don't have the full Tracking object here; PhotoDetailPage can load by ID.
-    // Pass the HistoryItem id as the Tracking id.
-    Navigator.pushNamed(
-      context,
-      AppRoutes.detail,
-      arguments: item.id,
-    );
+    Navigator.pushNamed(context, AppRoutes.detail, arguments: item.id);
   }
-
 
   String _formatDate(DateTime dt) {
     final d = dt.day.toString().padLeft(2, '0');
@@ -443,25 +454,30 @@ class _HistoryListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isTracking = item.status == HistoryStatus.trackingSession;
-    final statusColor = isTracking
-        ? const Color(0xFF00e676) // Neon green
-        : const Color(0xFF64b5f6); // Blue
+    final isReporting = item.isReporting;
+    final statusColor = isReporting
+        ? Colors.orangeAccent
+        : isTracking
+            ? const Color(0xFF00e676)
+            : const Color(0xFF64b5f6);
 
-    final statusText = isTracking ? 'Tracking' : 'Snapshot';
+    final statusText = isReporting
+        ? 'REPORT'
+        : isTracking
+            ? 'Tracking'
+            : 'Snapshot';
 
     return InkWell(
       onTap: onTap,
-      onLongPress: selectionMode ? onLongPress : null,
+      onLongPress: onLongPress,
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: const Color(0xFF1e1e1e),
+          color: isSelected ? const Color(0xFF24303A) : const Color(0xFF1e1e1e),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected
-                ? const Color(0xFF00e676)
-                : Colors.transparent,
+            color: isSelected ? const Color(0xFF00e676) : Colors.transparent,
             width: isSelected ? 2 : 0,
           ),
         ),
@@ -480,19 +496,14 @@ class _HistoryListItem extends StatelessWidget {
                   child: item.imagePath != null
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            item.imagePath!,
+                          child: Image.file(
+                            File(item.imagePath!),
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Icon(
-                              Icons.image,
-                              color: Colors.grey,
-                            ),
+                            errorBuilder: (context, error, stackTrace) =>
+                                const Icon(Icons.image, color: Colors.grey),
                           ),
                         )
-                      : const Icon(
-                          Icons.location_on,
-                          color: Colors.grey,
-                        ),
+                      : const Icon(Icons.location_on, color: Colors.grey),
                 ),
 
                 const SizedBox(width: 12),
@@ -542,28 +553,37 @@ class _HistoryListItem extends StatelessWidget {
                       // Coordinates (jika ada)
                       Text(
                         item.coordinatesDisplay,
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 10,
-                        ),
+                        style: TextStyle(color: Colors.grey[600], fontSize: 10),
                       ),
+                      if (isReporting && item.reportSeverity?.isNotEmpty == true)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Severity: ${_formatSeverity(item.reportSeverity)}',
+                            style: TextStyle(
+                              color: statusColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
 
                 // RIGHT: Status Badge
-                Container(
+                if (isReporting)
+                  const ReportBadge()
+                else
+                  Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.2),
+                    color: statusColor.withAlpha((0.2 * 255).round()),
                     borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                      color: statusColor,
-                      width: 1,
-                    ),
+                    border: Border.all(color: statusColor, width: 1),
                   ),
                   child: Text(
                     statusText,
@@ -576,9 +596,40 @@ class _HistoryListItem extends StatelessWidget {
                 ),
               ],
             ),
+            if (selectionMode)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: CircleAvatar(
+                  radius: 14,
+                  backgroundColor: isSelected
+                      ? const Color(0xFF00e676)
+                      : Colors.white12,
+                  child: Icon(
+                    isSelected ? Icons.check : Icons.radio_button_unchecked,
+                    size: 16,
+                    color: isSelected ? Colors.black : Colors.white70,
+                  ),
+                ),
+              ),
           ],
         ),
       ),
     );
+  }
+
+  String _formatSeverity(String? severity) {
+    if (severity == null || severity.isEmpty) return '-';
+
+    switch (severity.toLowerCase()) {
+      case 'low':
+        return 'Rendah';
+      case 'medium':
+        return 'Sedang';
+      case 'high':
+        return 'Tinggi';
+      default:
+        return severity[0].toUpperCase() + severity.substring(1);
+    }
   }
 }

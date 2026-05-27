@@ -2,6 +2,7 @@
 /// 
 /// File ini menunjukkan contoh-contoh concrete bagaimana menggunakan Navigator.pushNamed
 /// di berbagai konteks widget (buttons, tiles, etc.)
+library;
 
 // =============================================================================
 // EXAMPLE 1: Simple Navigation dari Button (HomePage ke Gallery)
