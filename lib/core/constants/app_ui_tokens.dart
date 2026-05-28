@@ -32,22 +32,22 @@ class AppUiTokens {
 
   // Camera overlay tokens
   static Color overlayPanelColor(BuildContext context) =>
-      Colors.black.withOpacity(0.4);
+      const Color.fromRGBO(0, 0, 0, 0.4);
 
   static Color overlayPanelBorder(BuildContext context) =>
-      Colors.white.withOpacity(0.08);
+      const Color.fromRGBO(255, 255, 255, 0.08);
 
   static Color overlayPanelBackground(BuildContext context) =>
-      Colors.black.withOpacity(0.55);
+      const Color.fromRGBO(0, 0, 0, 0.55);
 
   static Color iconButtonBackground(BuildContext context) =>
-      Colors.white.withOpacity(0.08);
+      const Color.fromRGBO(255, 255, 255, 0.08);
 
   static Color iconButtonIconColor(BuildContext context) =>
       Colors.white;
 
   static Color textSecondaryColor(BuildContext context) =>
-      Theme.of(context).colorScheme.onSurface.withOpacity(0.7);
+      Theme.of(context).colorScheme.onSurface.withAlpha(179);
 
   static TextStyle titleBold(BuildContext context) =>
       Theme.of(context).textTheme.titleMedium!.copyWith(fontWeight: FontWeight.w700);
@@ -63,13 +63,13 @@ class AppUiTokens {
       const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600);
 
   static TextStyle cameraMetaAddress(BuildContext context) =>
-      TextStyle(
-        color: Colors.white.withOpacity(0.75),
+      const TextStyle(
+        color: Color.fromRGBO(255, 255, 255, 0.75),
         fontSize: 12.5,
         height: 1.25,
       );
 
   static TextStyle cameraMetaCoords(BuildContext context) =>
-      TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12);
+      const TextStyle(color: Color.fromRGBO(255, 255, 255, 0.7), fontSize: 12);
 }
 

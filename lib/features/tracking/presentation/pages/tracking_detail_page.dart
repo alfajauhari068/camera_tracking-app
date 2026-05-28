@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../domain/entities/tracking_detail_ui_model.dart';
@@ -233,9 +235,25 @@ class TrackingDetailPage extends StatelessWidget {
               aspectRatio: 16 / 9,
               child: Container(
                 color: const Color(0xFF2c2c2c),
-                child: _effectiveData.imagePath != null
-                    ? Image.network(_effectiveData.imagePath!, fit: BoxFit.cover, errorBuilder: (_, _, _) => _buildPhotoPlaceholder())
-                    : _buildPhotoPlaceholder(),
+                child: () {
+                  final imagePath = _effectiveData.imagePath;
+                  if (imagePath == null || imagePath.isEmpty) {
+                    return _buildPhotoPlaceholder();
+                  }
+                  try {
+                    final imageFile = File(imagePath);
+                    if (!imageFile.existsSync()) {
+                      return _buildPhotoPlaceholder();
+                    }
+                    return Image.file(
+                      imageFile,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _buildPhotoPlaceholder(),
+                    );
+                  } catch (_) {
+                    return _buildPhotoPlaceholder();
+                  }
+                }(),
               ),
             ),
           ),

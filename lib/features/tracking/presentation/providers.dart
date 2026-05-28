@@ -26,6 +26,7 @@ import '../data/services/real_logger.dart';
 import '../data/services/real_permission_service.dart';
 import '../data/services/real_time_provider.dart';
 import '../data/services/timestamp_id_generator.dart';
+import 'camera_manager/camera_manager.dart';
 
 // Core services
 final loggerProvider = Provider<Logger>((ref) => const RealLogger());
@@ -54,6 +55,14 @@ final locationServiceProvider = Provider<LocationService>(
 
 final geocodingServiceProvider = Provider<GeocodingService>(
   (ref) => RealGeocodingService(ref.watch(loggerProvider)),
+);
+
+final cameraManagerProvider = Provider<CameraManager>(
+  (ref) {
+    final manager = CameraManager();
+    ref.onDispose(() => manager.dispose());
+    return manager;
+  },
 );
 
 // Data sources

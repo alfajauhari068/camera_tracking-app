@@ -310,22 +310,24 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
   /// ✅ Load actual photo menggunakan Image.file()
   /// ✅ Fallback ke placeholder jika file invalid
   Widget _buildPhotoPreview(Tracking tracking) {
-    // Check if imagePath is valid
-    if (tracking.imagePath.isEmpty) {
+    final path = tracking.imagePath;
+    final file = File(path);
+
+    if (path.isEmpty || !file.existsSync()) {
       return const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
             SizedBox(height: 8),
-            Text('No image path', style: TextStyle(color: Colors.grey)),
+            Text('No image ditemukan', style: TextStyle(color: Colors.grey)),
           ],
         ),
       );
     }
 
     return Image.file(
-      File(tracking.imagePath),
+      file,
       fit: BoxFit.cover,
       errorBuilder: (context, error, stackTrace) {
         return Center(
@@ -333,13 +335,13 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(Icons.broken_image, size: 64, color: Colors.red),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Text(
-                  'Failed to load image\nPath: ${tracking.imagePath}',
+                  'Gagal memuat gambar\nPath: $path',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12),
+                  style: const TextStyle(fontSize: 12),
                 ),
               ),
             ],

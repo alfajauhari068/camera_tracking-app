@@ -417,9 +417,7 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage> {
       }
 
       final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
+        desiredAccuracy: LocationAccuracy.high,
       );
 
       final lat = pos.latitude;

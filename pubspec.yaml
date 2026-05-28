@@ -39,10 +39,10 @@ dependencies:
   path_provider: ^2.1.1
 
   # Camera plugin for taking pictures
-  camera: ^0.10.5+9
+  camera: ^0.10.5+5
 
   # Geocoding for address lookup
-  geocoding: ^3.0.0
+  geocoding: ^2.1.1
 
   # Permission handling
   permission_handler: ^11.3.1
@@ -50,14 +50,17 @@ dependencies:
   latlong2: ^0.9.1
 
   # State management
-  flutter_riverpod: ^2.5.1
-  geolocator: ^14.0.2
+  flutter_riverpod: ^2.4.9
+  geolocator: ^10.1.0
 
   # Settings persistence
   shared_preferences: ^2.3.2
+  # SQLite local storage
+  sqflite: ^2.3.0
+  path: ^1.8.3
 
   # Share functionality
-  share_plus: ^10.0.2
+  share_plus: ^7.2.1
 
 dev_dependencies:
   flutter_test:
@@ -80,10 +83,10 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  # Application assets (images, icons)
+  assets:
+    - assets/images/
+    - assets/icons/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

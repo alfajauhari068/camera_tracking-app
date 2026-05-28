@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
 import '../../../../core/error/failures.dart';
 import '../models/tracking_model.dart';
@@ -63,8 +64,33 @@ class TrackingLocalDataSourceImpl implements TrackingLocalDataSource {
         print('[TrackingLocalDataSource] Creating new file: ${file.path}');
       }
 
+      // Prepare JSON to save. If image exists, copy it to app documents/images
+      final Map<String, dynamic> jsonToSave = Map<String, dynamic>.from(model.toJson());
+      final originalImagePath = model.imagePath;
+      if (originalImagePath.isNotEmpty) {
+        try {
+          final original = File(originalImagePath);
+          if (original.existsSync()) {
+            final dir = await getApplicationDocumentsDirectory();
+            final imagesDir = Directory('${dir.path}/images');
+            if (!imagesDir.existsSync()) imagesDir.createSync(recursive: true);
+            final ext = p.extension(original.path);
+            final destPath = '${imagesDir.path}/${model.id}$ext';
+            if (original.path != destPath) {
+              await original.copy(destPath);
+              print('[TrackingLocalDataSource] Copied image to: $destPath');
+            }
+            jsonToSave['imagePath'] = destPath;
+          } else {
+            print('[TrackingLocalDataSource] Original image not found: $originalImagePath');
+          }
+        } catch (e) {
+          print('[TrackingLocalDataSource] ❌ Error copying image: $e');
+        }
+      }
+
       // Add new data
-      existingData.add(model.toJson());
+      existingData.add(jsonToSave);
       print('[TrackingLocalDataSource] New data count: ${existingData.length}');
 
       // Write back to file
