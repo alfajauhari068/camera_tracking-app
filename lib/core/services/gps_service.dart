@@ -65,6 +65,20 @@ class GpsService {
   StreamSubscription<Position>? _positionSubscription;
   GpsStatus _currentStatus;
 
+  // Global mock toggle and mock coordinates for simulator mode.
+  static bool mockEnabled = false;
+  static double mockLatitude = -6.200000;
+  static double mockLongitude = 106.816666;
+  static double mockAccuracy = 5.0;
+
+  static void setMockMode(bool enabled,
+      {double? latitude, double? longitude, double? accuracy}) {
+    mockEnabled = enabled;
+    if (latitude != null) mockLatitude = latitude;
+    if (longitude != null) mockLongitude = longitude;
+    if (accuracy != null) mockAccuracy = accuracy;
+  }
+
   GpsService._(
     this._statusController,
     this._currentStatus,

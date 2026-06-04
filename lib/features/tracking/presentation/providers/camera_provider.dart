@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../camera_manager/camera_manager.dart';
 import '../providers.dart';
+import 'state/camera_config_notifier.dart';
+import 'state/camera_config_state.dart';
 
 class CameraProviderState {
   final bool isInitializing;
@@ -109,6 +111,15 @@ class CameraProviderNotifier extends StateNotifier<CameraProviderState> {
   double get physicalZoomFactor => state.zoomLevel;
 }
 
-final cameraProvider = StateNotifierProvider<CameraProviderNotifier, CameraProviderState>(
+final cameraConfigProvider = StateNotifierProvider<
+    CameraConfigNotifier, CameraConfigState>(
+  (ref) => CameraConfigNotifier(),
+);
+
+final cameraProvider = StateNotifierProvider<
+    CameraProviderNotifier, CameraProviderState>(
   (ref) => CameraProviderNotifier(ref.watch(cameraManagerProvider)),
 );
+
+
+

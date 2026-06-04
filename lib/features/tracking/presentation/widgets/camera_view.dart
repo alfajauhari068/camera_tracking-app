@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:ui' show ImageFilter;
+
 
 typedef AspectRatioChanged = void Function(String ratio);
 typedef ZoomLevelChanged = void Function(double zoom);
@@ -20,6 +22,19 @@ class CameraView extends StatefulWidget {
   final AspectRatioChanged onAspectRatioChanged;
   final ZoomLevelChanged onZoomLevelChanged;
 
+  /// Top Actions Bar callbacks (optional to keep backwards compatibility)
+  final VoidCallback? onWatermarkThemeCycle;
+  final VoidCallback? onMockGpsToggle;
+  final VoidCallback? onRotateCameraToggle;
+  final VoidCallback? onSettingsPressed;
+  final VoidCallback? onLayersPressed;
+
+  /// Visual states for the toggle buttons
+  final bool isMockGpsActive;
+  final String watermarkTheme;
+
+  final bool isLayersPanelActive;
+
   const CameraView({
     super.key,
     required this.cameraPreview,
@@ -37,7 +52,21 @@ class CameraView extends StatefulWidget {
     required this.onCapture,
     required this.onAspectRatioChanged,
     required this.onZoomLevelChanged,
+
+    this.onWatermarkThemeCycle,
+    this.onMockGpsToggle,
+    this.onRotateCameraToggle,
+    this.onSettingsPressed,
+    this.onLayersPressed,
+
+    this.isMockGpsActive = false,
+    this.watermarkTheme = 'Classic Navy',
+    this.isLayersPanelActive = false,
   });
+
+
+  // NOTE: Constructor moved above to initialize all finals.
+
 
   static double calculateAspectRatio(String ratio) {
     final parts = ratio.split(':');
@@ -104,8 +133,11 @@ class _CameraViewState extends State<CameraView>
                     _buildTopOverlay(theme),
                     const Spacer(),
                     _buildZoomAndRatioBar(theme),
+                    const SizedBox(height: 6),
+                    _buildAspectRatioPills(theme),
                     const SizedBox(height: 12),
                     _buildBottomWatermark(theme),
+
                   ],
                 ),
               ),
@@ -125,25 +157,108 @@ class _CameraViewState extends State<CameraView>
 
   Widget _buildTopOverlay(ThemeData theme) {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        _buildIconButton(
-          icon: widget.isFlashOn ? Icons.flash_on : Icons.flash_off,
-          label: 'Flash',
-          active: widget.isFlashOn,
-          onTap: widget.onFlashToggle,
+        _buildIconOnlyButton(
+          icon: Icons.close,
+          active: false,
+          onTap: () => Navigator.of(context).maybePop(),
+          tooltip: 'Close',
         ),
-        const SizedBox(width: 10),
-        _buildIconButton(
-          icon: Icons.grid_on,
-          label: 'Grid',
-          active: widget.showGridLines,
-          onTap: widget.onGridToggle,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _buildIconButton(
+              icon: Icons.water_drop,
+              label: 'Theme',
+              active: widget.watermarkTheme.isNotEmpty,
+              onTap: widget.onWatermarkThemeCycle ?? () {},
+            ),
+            const SizedBox(width: 10),
+
+            _buildIconButton(
+              icon: widget.isFlashOn ? Icons.flash_on : Icons.flash_off,
+              label: 'Flash',
+              active: widget.isFlashOn,
+              onTap: widget.onFlashToggle,
+            ),
+            const SizedBox(width: 10),
+            _buildIconButton(
+              icon: Icons.grid_on,
+              label: 'Grid',
+              active: widget.showGridLines,
+              onTap: widget.onGridToggle,
+            ),
+            const SizedBox(width: 10),
+            _buildIconButton(
+              icon: Icons.layers,
+              label: 'Layers',
+              active: widget.isLayersPanelActive,
+              onTap: widget.onLayersPressed ?? () {},
+            ),
+          ],
         ),
-        const Spacer(),
-        _buildAspectBadge(theme),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            _buildIconOnlyButton(
+              icon: Icons.my_location,
+              active: widget.isMockGpsActive,
+              onTap: widget.onMockGpsToggle ?? () {},
+              tooltip: 'Mock GPS',
+            ),
+            const SizedBox(width: 10),
+            _buildIconOnlyButton(
+              icon: Icons.rotate_right,
+              active: false,
+              onTap: widget.onRotateCameraToggle ?? () {},
+              tooltip: 'Rotate camera',
+            ),
+            const SizedBox(width: 10),
+            _buildIconOnlyButton(
+              icon: Icons.settings,
+              active: false,
+              onTap: widget.onSettingsPressed ?? () {},
+              tooltip: 'Settings',
+            ),
+          ],
+        ),
       ],
     );
   }
+
+  Widget _buildIconOnlyButton({
+    required IconData icon,
+    required bool active,
+    required VoidCallback onTap,
+    required String tooltip,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: active ? Colors.amber : Colors.white.withOpacity(0.08),
+              width: 1,
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: 20,
+            color: active ? Colors.amber : Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+
 
   Widget _buildIconButton({
     required IconData icon,
@@ -261,6 +376,54 @@ class _CameraViewState extends State<CameraView>
     );
   }
 
+  Widget _buildAspectRatioPills(ThemeData theme) {
+    return Center(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: _aspectOptions.map((ratio) {
+          final isSelected = widget.selectedAspectRatio == ratio;
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: () {
+                // HapticFeedback is available via flutter/services.dart in some setups;
+                // fallback to no-op when not supported.
+                // ignore: avoid_print
+                // (No import changes here to prevent architecture violations.)
+                // If haptics are desired, wire it at widget layer that already imports services.
+                
+
+                widget.onAspectRatioChanged(ratio);
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected ? Colors.cyanAccent : Colors.black54,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: isSelected ? Colors.cyanAccent : Colors.white24,
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  ratio,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: isSelected ? Colors.black : Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+
   Widget _buildSmallButton({
     required String label,
     required bool active,
@@ -371,53 +534,127 @@ class _CameraViewState extends State<CameraView>
       alwaysUse24HourFormat: true,
     );
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.black54,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            widget.locationName,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
+    final themeId = widget.watermarkTheme;
+
+    late final Color panelBg;
+
+    late final Color borderColor;
+    late final TextStyle textStyle;
+
+    switch (themeId) {
+      case 'Classic Navy':
+        panelBg = const Color(0xBB161D30);
+        borderColor = const Color(0xFF39FF14);
+        textStyle = theme.textTheme.bodyMedium!.copyWith(
+          color: const Color(0xFFFFFFFF),
+          fontWeight: FontWeight.w800,
+        );
+        break;
+      case 'Pure OLED Black':
+        panelBg = const Color(0xDD000000);
+        borderColor = const Color(0xFF00E5FF);
+        textStyle = theme.textTheme.bodyMedium!.copyWith(
+          color: const Color(0xFFFFFFFF),
+          fontWeight: FontWeight.w700,
+          fontFamily: 'monospace',
+        );
+        break;
+      case 'Sunset Slate':
+        panelBg = const Color(0xBB334155);
+        borderColor = const Color(0xFFFF6D00);
+        textStyle = theme.textTheme.bodyMedium!.copyWith(
+          color: const Color(0xFFFF6D00),
+          fontWeight: FontWeight.w800,
+        );
+        break;
+      default:
+        panelBg = const Color(0xBB161D30);
+        borderColor = const Color(0xFF39FF14);
+        textStyle = theme.textTheme.bodyMedium!.copyWith(
+          color: const Color(0xFFFFFFFF),
+          fontWeight: FontWeight.w800,
+        );
+    }
+
+    final accentText = textStyle.color ?? const Color(0xFFFFFFFF);
+
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          decoration: BoxDecoration(
+            color: panelBg,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: borderColor, width: 1),
           ),
-          const SizedBox(height: 6),
-          Text(
-            widget.addressLine,
-            style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 8),
-          Row(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  widget.coordinates,
-                  style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.locationName,
+                      style: textStyle,
+                    ),
+
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0x22000000),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: borderColor.withOpacity(0.7), width: 1),
+                    ),
+                    child: Text(
+                      widget.accuracyLabel.replaceAll('±', '').trim(),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: accentText,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
               ),
+              const SizedBox(height: 6),
               Text(
-                widget.accuracyLabel,
+                widget.addressLine,
                 style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 10),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.coordinates,
+                      style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '$timeText · $timeHour',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: Colors.white54,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            '$timeText · $timeHour',
-            style: theme.textTheme.bodySmall?.copyWith(color: Colors.white54),
-          ),
-        ],
+        ),
       ),
     );
   }
+
 }
 
 class _RuleOfThirdsGrid extends StatelessWidget {
