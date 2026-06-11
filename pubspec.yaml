@@ -30,48 +30,29 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
-
-  # Path provider for accessing app directories
   path_provider: ^2.1.1
-
-  # Camera plugin for taking pictures
   camera: ^0.10.5+5
-
-  # Geocoding for address lookup
   geocoding: ^2.1.1
-
-  # Permission handling
   permission_handler: ^11.3.1
   flutter_map: ^8.3.0
   latlong2: ^0.9.1
-
-  # State management
   flutter_riverpod: ^2.4.9
   geolocator: ^10.1.0
-
-  # Settings persistence
   shared_preferences: ^2.3.2
-  # SQLite local storage
   sqflite: ^2.3.0
   path: ^1.8.3
-
-  # Share functionality
   share_plus: ^7.2.1
 
 dev_dependencies:
-  flutter_test:
-    sdk: flutter
-
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
+  flutter_launcher_icons: ^0.14.4
   flutter_lints: ^6.0.0
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icons/play_store_512.png"
+  min_sdk_android: 21
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

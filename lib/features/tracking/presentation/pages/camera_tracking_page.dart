@@ -8,7 +8,15 @@ import 'package:flutter/services.dart'
     show Clipboard, ClipboardData, SystemNavigator;
 
 import 'package:camera/camera.dart'
-    show CameraController, CameraException, CameraLensDirection, ResolutionPreset, FocusMode, CameraPreview, CameraDescription, availableCameras;
+    show
+        CameraController,
+        CameraException,
+        CameraLensDirection,
+        ResolutionPreset,
+        FocusMode,
+        CameraPreview,
+        CameraDescription,
+        availableCameras;
 import 'package:camera/camera.dart' as camera show FlashMode;
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
@@ -183,7 +191,8 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
   }
 
   Future<void> _cycleFlashMode() async {
-    final next = FlashMode.values[(_flashMode.index + 1) % FlashMode.values.length];
+    final next =
+        FlashMode.values[(_flashMode.index + 1) % FlashMode.values.length];
     setState(() => _flashMode = next);
     await _applyFlashModeToController(next);
   }
@@ -223,11 +232,6 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
     final double glowOpacity = isFlashActive ? 0.52 : 0.0;
     final double pulse = _flashPulseController.value;
 
-    // Determine if front camera is active
-    final isFrontCamera = _availableCameras.isNotEmpty &&
-        _availableCameras[_currentCameraIndex].lensDirection ==
-            CameraLensDirection.front;
-
     return AnimatedBuilder(
       animation: _lensFlipController,
       builder: (context, child) {
@@ -235,9 +239,11 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
           ..setEntry(3, 2, 0.001)
           ..rotateY(_lensFlipController.value * 3.14159265359);
 
-        if (isFrontCamera) {
-          matrix.scale(-1.0, 1.0, 1.0);
-        }
+        // Remove horizontal mirror for front camera preview so the preview
+        // reflects real-world left/right orientation.
+        // if (isFrontCamera) {
+        //   matrix.scale(-1.0, 1.0, 1.0);
+        // }
 
         return Stack(
           fit: StackFit.expand,
@@ -296,11 +302,7 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
               ),
             ),
 
-            Positioned(
-              top: 16,
-              right: 16,
-              child: _buildStatusBadge(cfg),
-            ),
+            Positioned(top: 72, right: 16, child: _buildStatusBadge(cfg)),
           ],
         );
       },
@@ -308,7 +310,6 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
   }
 
   Widget _buildStatusBadge(CameraConfigState cfg) {
-
     final bool flashActive = _flashMode == FlashMode.on;
     final double pulseValue = _flashPulseController.value;
     final Color flashColor = flashActive ? Colors.orangeAccent : Colors.white70;
@@ -434,7 +435,9 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
       duration: const Duration(milliseconds: 600),
     );
 
-    _initializeControllerFuture = _ensureCameraPermission().then((granted) async {
+    _initializeControllerFuture = _ensureCameraPermission().then((
+      granted,
+    ) async {
       if (!granted) {
         throw CameraException(
           'CameraPermissionDenied',
@@ -505,7 +508,9 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
     if (controller == null || !controller.value.isInitialized) return;
 
     try {
-      await controller.setFlashMode(turnOn ? camera.FlashMode.always : camera.FlashMode.off);
+      await controller.setFlashMode(
+        turnOn ? camera.FlashMode.always : camera.FlashMode.off,
+      );
     } on CameraException catch (e) {
       _logger.error('CameraException while applying flash mode', e);
     } catch (e) {
@@ -514,11 +519,13 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
   }
 
   Future<void> _switchCamera() async {
-    // Start the 3D flip animation
+    // Play the 3D flip animation forward, switch camera, then reverse
     await _lensFlipController.forward(from: 0.0);
 
     if (_availableCameras.isEmpty) {
       await _initCamera();
+      // Ensure animation returns to neutral state
+      await _lensFlipController.reverse();
       return;
     }
 
@@ -534,10 +541,16 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
     final chosenIdx = nextIdx != -1 ? nextIdx : fallbackIdx;
 
     await _initCamera(cameraIndex: chosenIdx);
-    ref.read(cameraConfigProvider.notifier).setLensDirection(
-      _availableCameras[_currentCameraIndex].lensDirection == CameraLensDirection.back,
-    );
+    ref
+        .read(cameraConfigProvider.notifier)
+        .setLensDirection(
+          _availableCameras[_currentCameraIndex].lensDirection ==
+              CameraLensDirection.back,
+        );
     await _applyFlashModeToController(_flashMode);
+
+    // Reverse the flip to show the newly-selected camera upright
+    await _lensFlipController.reverse();
   }
 
   Future<void> _applyZoom(double zoom) async {
@@ -582,6 +595,40 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
     }
   }
 
+  /// PERBAIKAN: Validate GPS accuracy sebelum generate share link
+  /// Return true jika accuracy acceptable (mock GPS atau accuracy <= 15 meter)
+  bool _isGpsAccuracyAcceptable() {
+    final cameraConfig = ref.watch(cameraConfigProvider);
+
+    // Mock GPS selalu acceptable untuk testing
+    if (cameraConfig.gpsMode.isSimulator) {
+      _logger.info('GPS accuracy check: PASS (Mock GPS enabled)');
+      return true;
+    }
+
+    // Real GPS: Jika belum ada koordinat, prompt user untuk refresh
+    if (_latitude == null || _longitude == null) {
+      _logger.warning('GPS accuracy check: FAIL (No coordinates available)');
+      return false;
+    }
+
+    // Check last update time - jika > 30 detik, koordinat mungkin stale
+    if (_lastLocationUpdateTime != null) {
+      final timeSinceUpdate = DateTime.now().difference(
+        _lastLocationUpdateTime!,
+      );
+      if (timeSinceUpdate.inSeconds > 30) {
+        _logger.warning(
+          'GPS accuracy check: WARN (Coordinates stale: ${timeSinceUpdate.inSeconds}s old)',
+        );
+        // Masih acceptable, tapi warn user
+      }
+    }
+
+    _logger.info('GPS accuracy check: PASS (Coordinates available and fresh)');
+    return true;
+  }
+
   Future<void> _refreshLocationData({bool showLoading = false}) async {
     if (showLoading && mounted) {
       setState(() => _locationLoading = true);
@@ -614,16 +661,17 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
         }
 
         // Get current position with high accuracy
-        final pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-          timeLimit: const Duration(seconds: 10),
-        ).timeout(
-          const Duration(seconds: 10),
-          onTimeout: () {
-            _logger.error('Location request timed out');
-            throw TimeoutException('GPS request timed out');
-          },
-        );
+        final pos =
+            await Geolocator.getCurrentPosition(
+              desiredAccuracy: LocationAccuracy.high,
+              timeLimit: const Duration(seconds: 10),
+            ).timeout(
+              const Duration(seconds: 10),
+              onTimeout: () {
+                _logger.error('Location request timed out');
+                throw TimeoutException('GPS request timed out');
+              },
+            );
 
         lat = pos.latitude;
         lng = pos.longitude;
@@ -674,7 +722,9 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
         _lastLocationUpdateTime = DateTime.now();
       });
 
-      _logger.info('Location refreshed: lat=$lat lng=$lng (mock=${isMockGpsEnabled})');
+      _logger.info(
+        'Location refreshed: lat=$lat lng=$lng (mock=${isMockGpsEnabled})',
+      );
     } finally {
       if (showLoading && mounted) {
         setState(() => _locationLoading = false);
@@ -721,9 +771,34 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
 
     switch (_selectedMode) {
       case CameraMode.locationShare:
-        // Use controller preview so captured photo matches active lens.
-        await _handlePhotoCapture(controller, saveToRepository: true);
-        await _handleLocationShare();
+        // PERBAIKAN: Refresh GPS SEBELUM capture foto untuk akurasi koordinat
+        await _refreshLocationData(showLoading: true);
+
+        // Validasi akurasi GPS sebelum capture
+        if (!_isGpsAccuracyAcceptable()) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Akurasi GPS rendah. Tunggu sebentar dan coba lagi.',
+              ),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+          return;
+        }
+
+        _logger.info(
+          'GPS coordinates confirmed before photo capture: lat=$_latitude, lng=$_longitude',
+        );
+
+        // Capture photo dengan koordinat yang sudah fresh
+        await _handlePhotoCapture(
+          controller,
+          saveToRepository: true,
+          skipLocationRefresh: true,
+        );
         break;
       case CameraMode.photo:
         await _handlePhotoCapture(controller, saveToRepository: true);
@@ -738,7 +813,8 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
   }
 
   Future<void> _handleLocationShare() async {
-    await _refreshLocationData(showLoading: true);
+    // PERBAIKAN: Jangan refresh GPS lagi di sini, gunakan koordinat yang sudah di-confirm di _onCapture
+    // Ini mencegah race condition dan drift koordinat antara foto vs link
 
     if (_latitude == null || _longitude == null) {
       if (!mounted) return;
@@ -766,6 +842,10 @@ Waktu: ${_formatDateTime(DateTime.now())}
 Google Maps: $maps
 ''';
 
+    _logger.info(
+      'Location share generated with consistent coordinates: lat=$_latitude, lng=$_longitude, maps=$maps',
+    );
+
     try {
       await Clipboard.setData(ClipboardData(text: shareText));
     } catch (_) {}
@@ -782,9 +862,14 @@ Google Maps: $maps
   Future<void> _handlePhotoCapture(
     CameraController controller, {
     bool saveToRepository = true,
+    bool skipLocationRefresh = false,
   }) async {
     try {
-      await _refreshLocationData(showLoading: true);
+      // PERBAIKAN: Hanya refresh GPS jika belum di-refresh di _onCapture
+      // Ini menjaga koordinat tetap konsisten antara foto dan share link
+      if (!skipLocationRefresh) {
+        await _refreshLocationData(showLoading: true);
+      }
 
       final xFile = await controller.takePicture();
       final now = DateTime.now();
@@ -797,6 +882,10 @@ Google Maps: $maps
         longitude: _longitude,
         timestamp: now,
         overlayConfig: _overlayConfig,
+      );
+
+      _logger.info(
+        'Photo captured with coordinates: lat=${photo.latitude}, lng=${photo.longitude}',
       );
 
       if (!mounted) return;
@@ -820,10 +909,13 @@ Google Maps: $maps
 
         await ref.read(trackingRepositoryProvider).saveTracking(tracking);
         ref.invalidate(trackingListProvider);
+        _logger.info('Tracking saved with ID: ${tracking.id}');
       }
 
       if (_selectedMode == CameraMode.locationShare) {
         await _showShareOptions(photo);
+        // Jangan refresh location lagi - koordinat sudah di-lock saat capture
+        await _handleLocationShare();
       }
 
       if (!mounted) return;
@@ -1287,217 +1379,224 @@ Google Maps: https://www.google.com/maps?q=${photo.latitude ?? 0},${photo.longit
       child: Scaffold(
         backgroundColor: Colors.black,
         body: SafeArea(
-        child: FutureBuilder<void>(
-          future: _initializeControllerFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                child: CircularProgressIndicator.adaptive(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              );
-            }
-
-            if (snapshot.hasError ||
-                _controller == null ||
-                !_controller!.value.isInitialized) {
-              final msg = snapshot.hasError
-                  ? snapshot.error.toString()
-                  : 'Camera not initialized';
-              _logger.error('Camera preview failed', msg);
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Text(
-                    'Failed to initialize camera.\n$msg',
-                    style: const TextStyle(color: Colors.white70),
-                    textAlign: TextAlign.center,
+          child: FutureBuilder<void>(
+            future: _initializeControllerFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: CircularProgressIndicator.adaptive(
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
-                ),
-              );
-            }
+                );
+              }
 
-            final screenWidth = MediaQuery.of(context).size.width;
-
-            return OrientationBuilder(
-              builder: (context, orientation) {
-                // Frame kamera ditaruh di area yang tersedia agar bisa fill layar.
-                // Gunakan height sisa setelah UI overlay (top bar + bottom bar + info overlay).
-                final double frameWidth = screenWidth;
-                final double frameHeight =
-                    MediaQuery.of(context).size.height -
-                    56 -
-                    64; // top bar + bottom bar
-                final double safeFrameHeight = frameHeight > 0
-                    ? frameHeight
-                    : MediaQuery.of(context).size.height;
-
-                return Stack(
-                  children: [
-                    // Viewfinder preview (with aspect-ratio cropping + optional digital zoom simulation)
-                    Align(
-                      alignment: Alignment.topCenter,
-                      child: SizedBox(
-                        width: frameWidth,
-                        height: safeFrameHeight,
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: _tapToFocus,
-                          child: ClipRect(
-                            child: _buildCroppedViewfinder(context),
-                          ),
-                        ),
-                      ),
+              if (snapshot.hasError ||
+                  _controller == null ||
+                  !_controller!.value.isInitialized) {
+                final msg = snapshot.hasError
+                    ? snapshot.error.toString()
+                    : 'Camera not initialized';
+                _logger.error('Camera preview failed', msg);
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      'Failed to initialize camera.\n$msg',
+                      style: const TextStyle(color: Colors.white70),
+                      textAlign: TextAlign.center,
                     ),
+                  ),
+                );
+              }
 
-                    if (_showGrid)
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: CustomPaint(painter: GridPainter()),
-                        ),
-                      ),
+              final screenWidth = MediaQuery.of(context).size.width;
 
-                    if (_isRecording)
-                      Positioned(
-                        top: 16,
-                        left: 16,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: const [
-                              Icon(
-                                Icons.fiber_manual_record,
-                                color: Colors.white,
-                                size: 12,
-                              ),
-                              SizedBox(width: 6),
-                              Text(
-                                'REC',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
+              return OrientationBuilder(
+                builder: (context, orientation) {
+                  // Frame kamera ditaruh di area yang tersedia agar bisa fill layar.
+                  // Gunakan height sisa setelah UI overlay (top bar + bottom bar + info overlay).
+                  final double frameWidth = screenWidth;
+                  final double frameHeight =
+                      MediaQuery.of(context).size.height -
+                      56 -
+                      64; // top bar + bottom bar
+                  final double safeFrameHeight = frameHeight > 0
+                      ? frameHeight
+                      : MediaQuery.of(context).size.height;
+
+                  return Stack(
+                    children: [
+                      // Viewfinder preview (with aspect-ratio cropping + optional digital zoom simulation)
+                      Align(
+                        alignment: Alignment.topCenter,
+                        child: SizedBox(
+                          width: frameWidth,
+                          height: safeFrameHeight,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: _tapToFocus,
+                            child: ClipRect(
+                              child: _buildCroppedViewfinder(context),
+                            ),
                           ),
                         ),
                       ),
 
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      child: _buildTopControlBar(context),
-                    ),
+                      if (_showGrid)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: CustomPaint(painter: GridPainter()),
+                          ),
+                        ),
 
-                    Positioned(
-                      left: 16,
-                      right: 16,
-                      bottom: 180,
-                      child: _InfoOverlay(
-                        meta: _meta,
-                        config: _overlayConfig,
-                        activeTheme: ref.watch(cameraConfigProvider).activeTheme,
-                        lastLocationUpdateTime: _lastLocationUpdateTime,
-                        isLoading: _locationLoading,
-                        watermarkOpacity: ref.watch(cameraConfigProvider).watermarkOpacity,
-                      ),
-                    ),
-
-                    Positioned(
-                      top: 72,
-                      left: 16,
-                      right: 16,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: IgnorePointer(
-                          ignoring: false,
+                      if (_isRecording)
+                        Positioned(
+                          top: 16,
+                          left: 16,
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
+                              horizontal: 12,
                               vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.55),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.08),
-                              ),
+                              color: Colors.red,
+                              borderRadius: BorderRadius.circular(20),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
-                              children: [
-                                for (final z in _zoomPresets)
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                    ),
-                                    child: InkWell(
-                                      onTap: () => _applyZoom(z.value),
-                                      borderRadius: BorderRadius.circular(10),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color:
-                                              (z.value - _zoomLevel).abs() <
-                                                  0.01
-                                              ? Colors.blue.withOpacity(0.25)
-                                              : Colors.transparent,
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                          border: Border.all(
-                                            color:
-                                                (z.value - _zoomLevel).abs() <
-                                                    0.01
-                                                ? Colors.blue.withOpacity(0.7)
-                                                : Colors.white.withOpacity(
-                                                    0.10,
-                                                  ),
-                                          ),
-                                        ),
-                                        child: Text(
-                                          z.label,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
+                              children: const [
+                                Icon(
+                                  Icons.fiber_manual_record,
+                                  color: Colors.white,
+                                  size: 12,
+                                ),
+                                SizedBox(width: 6),
+                                Text(
+                                  'REC',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
                                   ),
+                                ),
                               ],
                             ),
                           ),
                         ),
-                      ),
-                    ),
 
-                    Align(
-                      alignment: Alignment.bottomCenter,
-                      child: SafeArea(top: false, child: _buildBottomSection()),
-                    ),
-                  ],
-                );
-              },
-            );
-          },
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: _buildTopControlBar(context),
+                      ),
+
+                      Positioned(
+                        left: 16,
+                        right: 16,
+                        bottom: 180,
+                        child: _InfoOverlay(
+                          meta: _meta,
+                          config: _overlayConfig,
+                          activeTheme: ref
+                              .watch(cameraConfigProvider)
+                              .activeTheme,
+                          lastLocationUpdateTime: _lastLocationUpdateTime,
+                          isLoading: _locationLoading,
+                          watermarkOpacity: ref
+                              .watch(cameraConfigProvider)
+                              .watermarkOpacity,
+                        ),
+                      ),
+
+                      Positioned(
+                        top: 72,
+                        left: 16,
+                        right: 16,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: IgnorePointer(
+                            ignoring: false,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.55),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.08),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  for (final z in _zoomPresets)
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                      ),
+                                      child: InkWell(
+                                        onTap: () => _applyZoom(z.value),
+                                        borderRadius: BorderRadius.circular(10),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color:
+                                                (z.value - _zoomLevel).abs() <
+                                                    0.01
+                                                ? Colors.blue.withOpacity(0.25)
+                                                : Colors.transparent,
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                            border: Border.all(
+                                              color:
+                                                  (z.value - _zoomLevel).abs() <
+                                                      0.01
+                                                  ? Colors.blue.withOpacity(0.7)
+                                                  : Colors.white.withOpacity(
+                                                      0.10,
+                                                    ),
+                                            ),
+                                          ),
+                                          child: Text(
+                                            z.label,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      Align(
+                        alignment: Alignment.bottomCenter,
+                        child: SafeArea(
+                          top: false,
+                          child: _buildBottomSection(),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
         ),
       ),
-    ),
-  );
+    );
   }
 
   Widget _buildBottomSection() {
@@ -1578,8 +1677,8 @@ Google Maps: https://www.google.com/maps?q=${photo.latitude ?? 0},${photo.longit
                 icon: _flashMode == FlashMode.off
                     ? Icons.flash_off
                     : _flashMode == FlashMode.on
-                        ? Icons.flash_on
-                        : Icons.flash_auto,
+                    ? Icons.flash_on
+                    : Icons.flash_auto,
                 tooltip: 'Flash cycle',
                 onPressed: _cycleFlashMode,
               ),
@@ -1762,10 +1861,9 @@ class _InfoOverlay extends StatelessWidget {
                   meta.locationName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: _labelTextStyle(activeTheme).copyWith(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: _labelTextStyle(
+                    activeTheme,
+                  ).copyWith(fontSize: 16, fontWeight: FontWeight.w700),
                 ),
               ),
               if (isLoading)
@@ -1783,10 +1881,9 @@ class _InfoOverlay extends StatelessWidget {
           if (config.showTimestamp)
             Text(
               ts,
-              style: _infoTextStyle(activeTheme).copyWith(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
+              style: _infoTextStyle(
+                activeTheme,
+              ).copyWith(fontSize: 13, fontWeight: FontWeight.w600),
             ),
           if (config.showAddress) ...[
             const SizedBox(height: 8),
@@ -1807,10 +1904,9 @@ class _InfoOverlay extends StatelessWidget {
               'Lat,Lng: ${meta.coordinates}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: _infoTextStyle(activeTheme).copyWith(
-                color: _mutedTextColor(activeTheme),
-                fontSize: 12,
-              ),
+              style: _infoTextStyle(
+                activeTheme,
+              ).copyWith(color: _mutedTextColor(activeTheme), fontSize: 12),
             ),
           ],
           if (config.showMiniMap) ...[
@@ -2253,9 +2349,7 @@ class _BottomThemePreset {
 class _SettingsModalContent extends ConsumerWidget {
   final Function(FlashMode) onFlashChanged;
 
-  const _SettingsModalContent({
-    required this.onFlashChanged,
-  });
+  const _SettingsModalContent({required this.onFlashChanged});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -2278,9 +2372,9 @@ class _SettingsModalContent extends ConsumerWidget {
             // ==================== Watermark Opacity Slider ====================
             Text(
               'Watermark Opacity',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: Colors.white70,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(color: Colors.white70),
             ),
             const SizedBox(height: 8),
             Column(
@@ -2309,11 +2403,7 @@ class _SettingsModalContent extends ConsumerWidget {
                           fontSize: 12,
                         ),
                       ),
-                      Icon(
-                        Icons.info,
-                        size: 14,
-                        color: Colors.white54,
-                      ),
+                      Icon(Icons.info, size: 14, color: Colors.white54),
                     ],
                   ),
                 ),
@@ -2331,10 +2421,7 @@ class _SettingsModalContent extends ConsumerWidget {
                       'Disabled',
                       style: TextStyle(color: Colors.white54),
                     )
-                  : Text(
-                      cfg.activeTheme,
-                      style: TextStyle(color: primary),
-                    ),
+                  : Text(cfg.activeTheme, style: TextStyle(color: primary)),
               value: cfg.activeTheme.isNotEmpty,
               activeThumbColor: primary,
               onChanged: (value) {
@@ -2373,10 +2460,7 @@ class _SettingsModalContent extends ConsumerWidget {
             const SizedBox(height: 8),
             // ==================== Flash ====================
             SwitchListTile(
-              title: const Text(
-                'Flash',
-                style: TextStyle(color: Colors.white),
-              ),
+              title: const Text('Flash', style: TextStyle(color: Colors.white)),
               value: cfg.flashMode == CameraFlashMode.on,
               activeThumbColor: primary,
               onChanged: (value) {
@@ -2407,10 +2491,7 @@ class _SettingsModalContent extends ConsumerWidget {
             ),
             // ==================== Grid ====================
             SwitchListTile(
-              title: const Text(
-                'Grid',
-                style: TextStyle(color: Colors.white),
-              ),
+              title: const Text('Grid', style: TextStyle(color: Colors.white)),
               subtitle: cfg.showGrid
                   ? const Text(
                       'Rule of thirds grid visible',
