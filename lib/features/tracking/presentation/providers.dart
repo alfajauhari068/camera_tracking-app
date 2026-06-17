@@ -57,13 +57,11 @@ final geocodingServiceProvider = Provider<GeocodingService>(
   (ref) => RealGeocodingService(ref.watch(loggerProvider)),
 );
 
-final cameraManagerProvider = Provider<CameraManager>(
-  (ref) {
-    final manager = CameraManager();
-    ref.onDispose(() => manager.dispose());
-    return manager;
-  },
-);
+final cameraManagerProvider = Provider<CameraManager>((ref) {
+  final manager = CameraManager();
+  ref.onDispose(() => manager.dispose());
+  return manager;
+});
 
 // Data sources
 final trackingLocalDataSourceProvider = Provider<TrackingLocalDataSource>(
@@ -96,9 +94,7 @@ final captureTrackingProvider = Provider<CaptureTracking>(
 // ------------------------------
 
 final getTrackingByIdProvider = Provider<GetTrackingById>(
-  (ref) => GetTrackingById(
-    repository: ref.watch(trackingRepositoryProvider),
-  ),
+  (ref) => GetTrackingById(repository: ref.watch(trackingRepositoryProvider)),
 );
 
 final exportServiceProvider = Provider<ExportService>(
@@ -112,24 +108,15 @@ final exportTrackingsProvider = Provider<ExportTrackings>(
   ),
 );
 
-
 // State management
 class CaptureState {
   final bool isLoading;
   final Tracking? tracking;
   final Failure? error;
 
-  const CaptureState({
-    this.isLoading = false,
-    this.tracking,
-    this.error,
-  });
+  const CaptureState({this.isLoading = false, this.tracking, this.error});
 
-  CaptureState copyWith({
-    bool? isLoading,
-    Tracking? tracking,
-    Failure? error,
-  }) {
+  CaptureState copyWith({bool? isLoading, Tracking? tracking, Failure? error}) {
     return CaptureState(
       isLoading: isLoading ?? this.isLoading,
       tracking: tracking ?? this.tracking,
@@ -144,22 +131,23 @@ class CaptureNotifier extends StateNotifier<CaptureState> {
   final Logger _logger;
   final PermissionService _permissionService;
 
-  CaptureNotifier(
-    this._captureTracking,
-    this._logger,
-    this._permissionService,
-  ) : super(const CaptureState());
+  CaptureNotifier(this._captureTracking, this._logger, this._permissionService)
+    : super(const CaptureState());
 
   Future<void> capture() async {
     if (state.isLoading) {
-      _logger.warning('Capture already in progress, ignoring duplicate request');
+      _logger.warning(
+        'Capture already in progress, ignoring duplicate request',
+      );
       return;
     }
 
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final result = await _captureTracking.execute();
+      final result = await _captureTracking.execute(
+        watermark: _pendingWatermark,
+      );
 
       result.when(
         success: (tracking) {
@@ -172,10 +160,7 @@ class CaptureNotifier extends StateNotifier<CaptureState> {
         },
         failure: (error) {
           _logger.error('Capture failed: ${error.message}', error);
-          state = state.copyWith(
-            isLoading: false,
-            error: error,
-          );
+          state = state.copyWith(isLoading: false, error: error);
         },
       );
     } catch (e) {
@@ -210,11 +195,11 @@ class CaptureNotifier extends StateNotifier<CaptureState> {
   }
 }
 
-final captureNotifierProvider = StateNotifierProvider<CaptureNotifier, CaptureState>(
-  (ref) => CaptureNotifier(
-    ref.watch(captureTrackingProvider),
-    ref.watch(loggerProvider),
-    ref.watch(permissionServiceProvider),
-  ),
-);
-
+final captureNotifierProvider =
+    StateNotifierProvider<CaptureNotifier, CaptureState>(
+      (ref) => CaptureNotifier(
+        ref.watch(captureTrackingProvider),
+        ref.watch(loggerProvider),
+        ref.watch(permissionServiceProvider),
+      ),
+    );
