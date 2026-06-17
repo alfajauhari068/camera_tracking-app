@@ -32,6 +32,7 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   path_provider: ^2.1.1
+  image: ^4.1.0
   camera: ^0.10.5+5
   geocoding: ^2.1.1
   permission_handler: ^11.3.1
@@ -45,6 +46,8 @@ dependencies:
   share_plus: ^7.2.1
 
 dev_dependencies:
+  flutter_test:
+    sdk: flutter
   flutter_launcher_icons: ^0.14.4
   flutter_lints: ^6.0.0
 
@@ -94,3 +97,4 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+

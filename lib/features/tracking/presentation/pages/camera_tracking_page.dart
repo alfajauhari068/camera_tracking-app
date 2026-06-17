@@ -1,4 +1,4 @@
-// Rebuilt from the latest stable full preview to fix broken structure/duplicates.
+﻿// Rebuilt from the latest stable full preview to fix broken structure/duplicates.
 // NOTE: This version focuses on compilation and basic functionality.
 
 import 'dart:async';
@@ -136,7 +136,11 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
   bool get _isFlashOn => _flashMode == FlashMode.on;
 
   bool get _showGrid => ref.watch(cameraConfigProvider).showGrid;
-  final List<CameraZoomPreset> _zoomPresets = CameraZoomPreset.values;
+  List<CameraZoomPreset> _zoomPresets = [];
+
+  // Get device min/max zoom for filtering presets
+  double _minZoom = 1.0;
+  double _maxZoom = 1.0;
 
   CameraController? _controller;
   Future<void>? _initializeControllerFuture;
@@ -477,6 +481,15 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
 
     _controller = controller;
     await controller.initialize();
+    
+    // Get device zoom range for filtering presets
+    try {
+      _minZoom = await controller.getMinZoomLevel();
+      _maxZoom = await controller.getMaxZoomLevel();
+    } catch (_) {
+      _minZoom = 1.0;
+      _maxZoom = 1.0;
+    }
 
     await _applyFlashStateSafely(_isFlashOn);
 
@@ -509,7 +522,7 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
 
     try {
       await controller.setFlashMode(
-        turnOn ? camera.FlashMode.always : camera.FlashMode.off,
+        turnOn ? camera.FlashMode.auto : camera.FlashMode.off,
       );
     } on CameraException catch (e) {
       _logger.error('CameraException while applying flash mode', e);
@@ -572,7 +585,11 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
 
       // UI mengikuti nilai aktual yang berhasil diterapkan (jujur, tidak bohong).
       setState(() => _zoomLevel = clamped);
-
+      
+      // Sync zoom to camera service for capture
+      final cameraSrv = ref.read(cameraServiceProvider);
+      await cameraSrv.setZoom(clamped);
+      
       _logger.info(
         'Zoom set to ${clamped.toStringAsFixed(2)}x (requested: ${zoom.toStringAsFixed(2)}) '
         '; deviceRange=[${minZoomFallback.toStringAsFixed(2)}..${maxZoomFallback.toStringAsFixed(2)}] '
@@ -1361,10 +1378,6 @@ Google Maps: https://www.google.com/maps?q=${photo.latitude ?? 0},${photo.longit
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (context) => _SettingsModalContent(
-        onFlashChanged: (nextMode) async {
-          setState(() => _flashMode = nextMode);
-          await _applyFlashModeToController(nextMode);
-        },
       ),
     );
   }
@@ -1532,7 +1545,7 @@ Google Maps: https://www.google.com/maps?q=${photo.latitude ?? 0},${photo.longit
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  for (final z in _zoomPresets)
+                                  for (final z in _zoomPresets.where((z) => z.value >= _minZoom))
                                     Padding(
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 4,
@@ -2347,9 +2360,7 @@ class _BottomThemePreset {
 // ConsumerWidget untuk membuat settings modal reactive terhadap state changes
 
 class _SettingsModalContent extends ConsumerWidget {
-  final Function(FlashMode) onFlashChanged;
-
-  const _SettingsModalContent({required this.onFlashChanged});
+  const _SettingsModalContent();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -2465,7 +2476,7 @@ class _SettingsModalContent extends ConsumerWidget {
               activeThumbColor: primary,
               onChanged: (value) {
                 final nextMode = value ? FlashMode.on : FlashMode.off;
-                onFlashChanged(nextMode);
+                notifier.cycleFlashMode();
               },
             ),
             // ==================== GPS Simulator ====================
@@ -2547,3 +2558,15 @@ class GridPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+
+
+
+
+
+
+
+
+
+
+
+

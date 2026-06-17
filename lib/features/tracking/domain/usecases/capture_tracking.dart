@@ -45,7 +45,7 @@ class CaptureTracking {
   /// Execute the complete capture flow: permissions → camera → GPS → geocode → save
   /// Returns Result&lt;Tracking&gt; for controlled error flow (not exception-based)
   /// STRICT MODE: All steps must succeed, no partial data saved
-  Future<Result<Tracking>> execute() async {
+  Future<Result<Tracking>> execute({WatermarkConfig? watermark}) async {
     // Concurrency guard - prevent multiple simultaneous executions
     if (_isRunning) {
       _logger.warning('[CaptureTracking] Execution already in progress, rejecting duplicate request');
@@ -87,7 +87,7 @@ class CaptureTracking {
 
       // Step 2: Capture image
       _logger.log('[CaptureTracking] Capturing image...');
-      final imagePath = await _cameraService.takePicture();
+      final imagePath = await _cameraService.takePicture(watermark: watermark);
       _logger.log('[CaptureTracking] Image captured: $imagePath');
 
       // Step 3: Get location with timeout
@@ -161,3 +161,5 @@ class CaptureTracking {
     }
   }
 }
+
+

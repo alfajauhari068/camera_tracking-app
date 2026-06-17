@@ -3,7 +3,6 @@ import 'package:geolocator/geolocator.dart';
 import '../../../../core/error/failures.dart';
 import '../../domain/services/location_service.dart';
 import '../../domain/services/logger.dart';
-import '../../../../core/services/gps_service.dart';
 
 /// Real location service using geolocator package
 /// Handles GPS permissions, accuracy settings, and timeout
@@ -14,15 +13,6 @@ class RealLocationService implements LocationService {
 
   @override
   Future<LocationData> getLocation() async {
-    // If mock mode is enabled globally, return the simulated coordinates immediately.
-    if (GpsService.mockEnabled) {
-      logger.log('Returning mock location from RealLocationService (GpsService.mockEnabled)');
-      return const LocationData(
-        latitude: -6.200000,
-        longitude: 106.816666,
-        accuracy: 5.0,
-      );
-    }
     try {
       logger.log('Requesting location...');
 

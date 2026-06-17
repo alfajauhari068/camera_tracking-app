@@ -139,6 +139,7 @@ class CaptureState {
 }
 
 class CaptureNotifier extends StateNotifier<CaptureState> {
+  WatermarkConfig? _pendingWatermark;
   final CaptureTracking _captureTracking;
   final Logger _logger;
   final PermissionService _permissionService;
@@ -200,6 +201,10 @@ class CaptureNotifier extends StateNotifier<CaptureState> {
     }
   }
 
+  void setWatermarkConfig(WatermarkConfig config) {
+    _pendingWatermark = config;
+  }
+
   void reset() {
     state = const CaptureState();
   }
@@ -212,3 +217,4 @@ final captureNotifierProvider = StateNotifierProvider<CaptureNotifier, CaptureSt
     ref.watch(permissionServiceProvider),
   ),
 );
+
