@@ -29,10 +29,8 @@ class RealLocationService implements LocationService {
       // Get current position with high accuracy
       logger.log('Getting current position...');
       final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 10),
-        ),
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
       );
 
       logger.log('Position obtained: ${position.latitude}, ${position.longitude}');

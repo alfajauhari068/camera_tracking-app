@@ -1,106 +1,126 @@
-import 'package:camera/camera.dart';
+﻿import 'package:camera/camera.dart';
 
 import '../../../../core/error/failures.dart';
 import '../../domain/services/camera_service.dart';
 import '../../domain/services/logger.dart';
+import '../../domain/services/permission_service.dart';
 
-/// Real camera service implementation using camera plugin
-/// Supports persistent camera session with preview for manual capture
 class RealCameraService implements CameraService {
+  final PermissionService permissionService;
   final Logger logger;
 
   CameraController? _controller;
   List<CameraDescription>? _cameras;
-  bool _isInitialized = false;
+  double _currentZoom = 1.0;
+  double _minZoom = 1.0;
+  double _maxZoom = 1.0;
 
-  RealCameraService({
-    required this.logger,
-  });
+  RealCameraService({required this.permissionService, required this.logger});
 
-  /// Initialize camera for preview session (persistent)
-  /// Must be called before accessing preview or taking pictures
   @override
   Future<void> init() async {
-    if (_isInitialized) {
-      logger.log('[CameraService] Camera already initialized');
+    if (_controller != null && _controller!.value.isInitialized) return;
+    logger.log('[CameraService] Initializing camera session...');
+    final permissionStatus = await permissionService.requestCameraPermission();
+    if (permissionStatus == PermissionStatus.deniedForever) {
+      throw CameraFailure('Camera permission permanently denied. Please enable in app settings.');
+    }
+    if (permissionStatus != PermissionStatus.granted) {
+      throw CameraFailure('Camera permission denied. Please grant camera access.');
+    }
+    _cameras ??= await availableCameras();
+    if (_cameras!.isEmpty) {
+      throw CameraFailure('No camera available on this device');
+    }
+    final backCamera = _cameras!.firstWhere(
+      (camera) => camera.lensDirection == CameraLensDirection.back,
+      orElse: () => _cameras!.first,
+    );
+    final controller = CameraController(backCamera, ResolutionPreset.medium, enableAudio: false);
+    await controller.initialize();
+    _minZoom = await controller.getMinZoomLevel();
+    _maxZoom = await controller.getMaxZoomLevel();
+    _currentZoom = 1.0;
+    _controller = controller;
+  }
+
+  @override
+  Future<void> setCamera(CameraDescription camera) async {
+    if (_controller != null) {
+      await _controller!.dispose();
+      _controller = null;
+    }
+    _cameras ??= await availableCameras();
+    final controller = CameraController(camera, ResolutionPreset.medium, enableAudio: false);
+    await controller.initialize();
+    _minZoom = await controller.getMinZoomLevel();
+    _maxZoom = await controller.getMaxZoomLevel();
+    _currentZoom = 1.0;
+    _controller = controller;
+    logger.log('[CameraService] Camera set to: ' + camera.name);
+  }
+
+  @override
+  CameraController? getController() => _controller;
+
+  @override
+  bool isInitialized() => _controller?.value.isInitialized ?? false;
+
+  @override
+  Future<String> takePicture({WatermarkConfig? watermark}) async {
+    await init();
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) {
+      throw CameraFailure('Camera not initialized');
+    }
+    try {
+      logger.log('[CameraService] Taking picture with zoom: ' + _currentZoom.toString());
+      final image = await controller.takePicture();
+      if (watermark != null && watermark.enabled) {
+        return await _addWatermark(image.path, watermark);
+      }
+      return image.path;
+    } on CameraException catch (e) {
+      logger.error('[CameraService] Camera exception: ' + e.code + ' - ' + (e.description ?? ''));
+      throw _mapCameraException(e);
+    } catch (e) {
+      logger.error('[CameraService] Unexpected camera error: ' + e.toString());
+      throw CameraFailure('Unexpected camera error: ' + e.toString());
+    }
+  }
+
+  @override
+  Future<void> setZoom(double zoom) async {
+    if (_controller == null || !_controller!.value.isInitialized) {
+      logger.warning('[CameraService] Cannot set zoom - camera not initialized');
       return;
     }
-
+    final clamped = zoom.clamp(_minZoom, _maxZoom);
+    _currentZoom = clamped;
     try {
-      logger.log('[CameraService] Initializing camera session...');
-
-      // Get available cameras
-      _cameras ??= await availableCameras();
-      if (_cameras!.isEmpty) {
-        logger.error('[CameraService] No cameras available');
-        throw CameraFailure('No camera available on this device');
-      }
-
-      // Select back camera
-      final backCamera = _cameras!.firstWhere(
-        (camera) => camera.lensDirection == CameraLensDirection.back,
-        orElse: () => _cameras!.first,
-      );
-
-      // Create and initialize controller (persistent for preview)
-      _controller = CameraController(
-        backCamera,
-        ResolutionPreset.medium,
-        enableAudio: false,
-      );
-
-      await _controller!.initialize();
-      _isInitialized = true;
-      logger.log('[CameraService] Camera initialized successfully');
-
-    } on CameraException catch (e) {
-      logger.error('[CameraService] Camera exception during init: ${e.code}', e);
-      throw _mapCameraException(e);
+      await _controller!.setZoomLevel(clamped);
+      logger.log('[CameraService] Zoom set to: ' + clamped.toString() + ' (range: ' + _minZoom.toString() + '..' + _maxZoom.toString() + ')');
     } catch (e) {
-      logger.error('[CameraService] Unexpected error during init', e);
-      throw CameraFailure('Failed to initialize camera: $e');
+      logger.error('[CameraService] Failed to set zoom', e);
     }
   }
 
-  /// Get camera controller for UI preview
   @override
-  CameraController? getController() {
-    if (!_isInitialized) {
-      logger.warning('[CameraService] getController called but camera not initialized');
-      return null;
-    }
-    return _controller;
-  }
+  double getZoom() => _currentZoom;
 
-  /// Check if camera is initialized
   @override
-  bool isInitialized() => _isInitialized;
-
-  /// Take picture within active session (must call init() first)
-  @override
-  Future<String> takePicture() async {
-    try {
-      if (!_isInitialized || _controller == null) {
-        logger.error('[CameraService] Camera not initialized for capture');
-        throw CameraFailure('Camera not initialized. Call init() first.');
-      }
-
-      logger.log('[CameraService] Taking picture...');
-      final image = await _controller!.takePicture();
-      logger.log('[CameraService] Picture captured: ${image.path}');
-
-      return image.path;
-
-    } on CameraException catch (e) {
-      logger.error('[CameraService] Camera exception during capture: ${e.code}', e);
-      throw _mapCameraException(e);
-    } catch (e) {
-      logger.error('[CameraService] Unexpected error during capture', e);
-      throw CameraFailure('Failed to capture image: $e');
+  Future<void> dispose() async {
+    if (_controller != null) {
+      await _controller!.dispose();
+      _controller = null;
     }
   }
 
-  /// Map camera plugin exceptions to domain failures
+  Future<String> _addWatermark(String path, WatermarkConfig config) async {
+    logger.log('[CameraService] Watermark stub called for: ' + path);
+    return path;
+  }
+
   CameraFailure _mapCameraException(CameraException e) {
     switch (e.code) {
       case 'CameraAccessDenied':
@@ -124,17 +144,8 @@ class RealCameraService implements CameraService {
       case 'CameraPermissionNotGranted':
         return CameraFailure('Camera permission not granted.');
       default:
-        return CameraFailure('Camera error: ${e.description ?? e.code}');
-    }
-  }
-
-  /// Dispose resources
-  @override
-  Future<void> dispose() async {
-    if (_controller != null) {
-      await _controller!.dispose();
-      _controller = null;
-      _isInitialized = false;
+        return CameraFailure('Camera error: ' + e.code);
     }
   }
 }
+

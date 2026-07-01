@@ -1,45 +1,141 @@
-# Miscellaneous
+# ==========================
+
+# System / OS
+
+# ==========================
+
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ==========================
+
+# Temporary / Misc
+
+# ==========================
+
 *.class
 *.log
 *.pyc
 *.swp
-.DS_Store
-.atom/
-.build/
-.buildlog/
+*.tmp
+*.temp
+*.bak
+*.orig
+
 .history
-.svn/
-.swiftpm/
 migrate_working_dir/
 
-# IntelliJ related
+# Temporary files
+
+temp_*
+
+# Analysis outputs
+
+analyze_current.txt
+final_analysis.txt
+
+# ==========================
+
+# IDE / Editor
+
+# ==========================
+
+.atom/
+
+.idea/
 *.iml
 *.ipr
 *.iws
-.idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
+# VS Code
 
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
-.dart_tool/
-.flutter-plugins-dependencies
-.pub-cache/
-.pub/
-/build/
-/coverage/
+# Uncomment if workspace settings should stay local only
 
-# Symbolication related
-app.*.symbols
+# .vscode/
 
-# Obfuscation related
-app.*.map.json
+# ==========================
 
-# Android Studio will place build artifacts here
+# Build / Generated
+
+# ==========================
+
+.build/
+.buildlog/
+build/
+coverage/
+
+# Flutter build outputs
+
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# ==========================
+
+# Flutter / Dart
+
+# ==========================
+
+.dart_tool/
+.flutter-plugins-dependencies
+.pub/
+.pub-cache/
+
+**/doc/api/
+**/ios/Flutter/.last_build_id
+
+# ==========================
+
+# Symbolication / Obfuscation
+
+# ==========================
+
+app.*.symbols
+app.*.map.json
+
+# ==========================
+
+# Apple / Swift
+
+# ==========================
+
+.swiftpm/
+
+# ==========================
+
+# Version Control Artifacts
+
+# ==========================
+
+.svn/
+
+# ==========================
+
+# AI / Local Tool Artifacts
+
+# ==========================
+
+.blackboxcli/
+.ai-rules/
+
+# Local AI generated scripts
+
+*.ps1
+
+# AI notes / drafts
+
+TODO_AI*
+*_analysis.*
+*_report.*
+
+# ==========================
+
+# Optional Local Scratch Area
+
+# ==========================
+
+scratch/
+notes/
+local/
+tmp/

@@ -7,6 +7,7 @@ import '../services/geocoding_service.dart';
 import '../services/id_generator.dart';
 import '../services/location_service.dart';
 import '../services/logger.dart';
+import '../services/permission_service.dart';
 import '../services/time_provider.dart';
 
 class CaptureTracking {
@@ -16,6 +17,7 @@ class CaptureTracking {
   final GeocodingService _geocodingService;
   final IdGenerator _idGenerator;
   final TimeProvider _timeProvider;
+  final PermissionService _permissionService;
   final Logger _logger;
 
   // Concurrency guard - prevents multiple simultaneous executions
@@ -28,6 +30,7 @@ class CaptureTracking {
     required GeocodingService geocodingService,
     required IdGenerator idGenerator,
     required TimeProvider timeProvider,
+    required PermissionService permissionService,
     required Logger logger,
   }) :
     _repository = repository,
@@ -36,26 +39,55 @@ class CaptureTracking {
     _geocodingService = geocodingService,
     _idGenerator = idGenerator,
     _timeProvider = timeProvider,
+    _permissionService = permissionService,
     _logger = logger;
 
-  /// Execute the capture phase: camera → GPS → geocode → save
-  /// IMPORTANT: Permissions must be granted BEFORE calling this (handled in UI initialization phase)
+  /// Execute the complete capture flow: permissions → camera → GPS → geocode → save
   /// Returns Result&lt;Tracking&gt; for controlled error flow (not exception-based)
   /// STRICT MODE: All steps must succeed, no partial data saved
-  Future<Result<Tracking>> execute() async {
+  Future<Result<Tracking>> execute({WatermarkConfig? watermark}) async {
     // Concurrency guard - prevent multiple simultaneous executions
     if (_isRunning) {
-      _logger.warning('[CaptureTracking] Capture already in progress, rejecting duplicate request');
+      _logger.warning('[CaptureTracking] Execution already in progress, rejecting duplicate request');
       return Result.failure(GenericFailure('Capture already in progress. Please wait.'));
     }
 
     _isRunning = true;
-    _logger.log('[CaptureTracking] Starting photo + GPS + geocoding capture');
+    _logger.log('[CaptureTracking] Starting capture tracking flow');
 
     try {
-      // Step 1: Capture image
+      // Step 1: Check permissions
+      _logger.log('[CaptureTracking] Checking permissions...');
+      
+      // Check camera permission
+      final cameraPermission = await _permissionService.requestCameraPermission();
+      if (cameraPermission == PermissionStatus.deniedForever) {
+        _logger.error('[CaptureTracking] Camera permission permanently denied');
+        return Result.failure(
+          PermissionDeniedForeverFailure('Camera permission denied permanently. Please enable it in app settings.')
+        );
+      }
+      if (cameraPermission != PermissionStatus.granted) {
+        _logger.error('[CaptureTracking] Camera permission denied');
+        return Result.failure(CameraFailure('Camera permission denied. Please grant camera access.'));
+      }
+
+      // Check location permission
+      final locationPermission = await _permissionService.requestLocationPermission();
+      if (locationPermission == PermissionStatus.deniedForever) {
+        _logger.error('[CaptureTracking] Location permission permanently denied');
+        return Result.failure(
+          PermissionDeniedForeverFailure('Location permission denied permanently. Please enable it in app settings.')
+        );
+      }
+      if (locationPermission != PermissionStatus.granted) {
+        _logger.error('[CaptureTracking] Location permission denied');
+        return Result.failure(LocationFailure('Location permission denied. Please grant location access.'));
+      }
+
+      // Step 2: Capture image
       _logger.log('[CaptureTracking] Capturing image...');
-      final imagePath = await _cameraService.takePicture();
+      final imagePath = await _cameraService.takePicture(watermark: watermark);
       _logger.log('[CaptureTracking] Image captured: $imagePath');
 
       // Step 3: Get location with timeout
@@ -129,3 +161,5 @@ class CaptureTracking {
     }
   }
 }
+
+

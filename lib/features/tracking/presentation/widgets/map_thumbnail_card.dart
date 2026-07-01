@@ -1,13 +1,16 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../domain/entities/tracking.dart';
 
 /// MapThumbnailCard - Thumbnail untuk horizontal list di map
-/// 
+///
 /// Menampilkan:
-/// - Placeholder/image dari tracking.imagePath
+/// - Preview image dari tracking.imagePath jika tersedia
 /// - Address singkat di bawah
 /// - Highlight border jika selected
+/// - Coordinates kecil sebagai label
 class MapThumbnailCard extends StatelessWidget {
   final Tracking tracking;
   final bool isSelected;
@@ -22,10 +25,13 @@ class MapThumbnailCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasImage =
+        tracking.imagePath.isNotEmpty && File(tracking.imagePath).existsSync();
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 100,
+        width: 120,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
@@ -34,71 +40,55 @@ class MapThumbnailCard extends StatelessWidget {
           ),
           color: Colors.grey[300],
         ),
-        child: Stack(
-          fit: StackFit.expand,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Image placeholder
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(4),
-                color: Colors.grey[300],
-              ),
-              child: const Icon(Icons.image, size: 32, color: Colors.grey),
-            ),
-
-            // Address overlay
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
+            Expanded(
               child: Container(
-                padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
                   borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(4),
-                    bottomRight: Radius.circular(4),
+                    topLeft: Radius.circular(6),
+                    topRight: Radius.circular(6),
                   ),
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.6),
-                    ],
-                  ),
+                  color: Colors.grey[300],
+                  image: hasImage
+                      ? DecorationImage(
+                          image: FileImage(File(tracking.imagePath)),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
                 ),
-                child: Text(
-                  tracking.address,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 8,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                child: hasImage
+                    ? null
+                    : const Center(
+                        child: Icon(Icons.image, size: 32, color: Colors.grey),
+                      ),
               ),
             ),
-
-            // Selection indicator (checkmark di top-right)
-            if (isSelected)
-              Positioned(
-                top: 2,
-                right: 2,
-                child: Container(
-                  width: 16,
-                  height: 16,
-                  decoration: const BoxDecoration(
-                    color: Colors.blue,
-                    shape: BoxShape.circle,
+            Padding(
+              padding: const EdgeInsets.all(6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    tracking.address,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                  child: const Icon(
-                    Icons.check,
-                    size: 12,
-                    color: Colors.white,
+                  const SizedBox(height: 4),
+                  Text(
+                    '${tracking.latitude.toStringAsFixed(4)}, ${tracking.longitude.toStringAsFixed(4)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 9, color: Colors.grey),
                   ),
-                ),
+                ],
               ),
+            ),
           ],
         ),
       ),

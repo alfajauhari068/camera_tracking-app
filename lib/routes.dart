@@ -1,40 +1,56 @@
 import 'package:flutter/material.dart';
 
-import 'features/tracking/domain/entities/tracking.dart';
 import 'features/tracking/presentation/capture_screen.dart';
 import 'features/tracking/presentation/pages/gallery_page.dart';
 import 'features/tracking/presentation/pages/photo_detail_page.dart';
 import 'features/tracking/presentation/pages/map_page.dart';
 import 'features/tracking/presentation/pages/export_page.dart';
-import 'features/tracking/presentation/pages/home_page.dart';
+import 'features/tracking/presentation/pages/camera_tracking_page.dart';
+import 'features/tracking/presentation/pages/history_page.dart';
+import 'features/tracking/presentation/pages/tracking_detail_page.dart';
+import 'features/tracking/presentation/pages/settings_page.dart';
 
-/// Route path constants - semua route terpusat di sini
+/// Route path constants
 class AppRoutes {
   static const String home = '/';
   static const String camera = '/camera';
+  static const String cameraTracking = '/camera-tracking';  // Demo layout
   static const String gallery = '/gallery';
+  static const String history = '/history';  // History/Log page
   static const String detail = '/detail';
+  static const String trackingDetail = '/tracking-detail';  // Tracking detail page
   static const String map = '/map';
   static const String export = '/export';
+  static const String settings = '/settings';
 }
 
 /// Route generator - maps route paths ke widget pages
 Map<String, WidgetBuilder> getAppRoutes() {
   return {
-    // =========================================================================
-    // HOME PAGE (Dashboard)
-    // =========================================================================
-    AppRoutes.home: (context) => const HomePage(),
+    // NOTE:
+    // '/' tidak didefinisikan di sini karena entry point app memakai `home:`
+    // di main.dart (home: const CameraTrackingPage()).
+
 
     // =========================================================================
-    // CAMERA PAGE (Take Photo)
+    // CAMERA PAGE (Take Photo - Original)
     // =========================================================================
     AppRoutes.camera: (context) => const CaptureScreen(),
+
+    // =========================================================================
+    // CAMERA TRACKING PAGE (Demo layout only)
+    // =========================================================================
+    AppRoutes.cameraTracking: (context) => const CameraTrackingPage(),
 
     // =========================================================================
     // GALLERY PAGE (List of Photos)
     // =========================================================================
     AppRoutes.gallery: (context) => const GalleryPage(),
+
+    // =========================================================================
+    // HISTORY PAGE (Tracking Log)
+    // =========================================================================
+    AppRoutes.history: (context) => const HistoryPage(),
 
     // =========================================================================
     // PHOTO DETAIL PAGE (View Single Photo + Metadata)
@@ -45,6 +61,11 @@ Map<String, WidgetBuilder> getAppRoutes() {
     AppRoutes.detail: (context) => const PhotoDetailPage(),
 
     // =========================================================================
+    // TRACKING DETAIL PAGE (View Tracking Detail)
+    // =========================================================================
+    AppRoutes.trackingDetail: (context) => const TrackingDetailPage(),
+
+// =========================================================================
     // MAP PAGE (View Locations on Map)
     // =========================================================================
     AppRoutes.map: (context) => const MapPage(),
@@ -53,8 +74,14 @@ Map<String, WidgetBuilder> getAppRoutes() {
     // EXPORT PAGE (Export/Share Data)
     // =========================================================================
     AppRoutes.export: (context) => const ExportPage(),
+
+    // =========================================================================
+    // SETTINGS PAGE (App Settings)
+    // =========================================================================
+    AppRoutes.settings: (context) => const SettingsPage(),
   };
 }
+
 
 /// ON GENERATE ROUTE - untuk handling arguments & route params
 /// Gunakan ini jika perlu parsing arguments yang lebih kompleks
@@ -64,25 +91,10 @@ Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     // PHOTO DETAIL dengan arguments (trackingId atau Tracking object)
     // =========================================================================
     case AppRoutes.detail:
-      // Contoh 1: Terima trackingId (String)
-      if (settings.arguments is String) {
-        final trackingId = settings.arguments as String;
-        return MaterialPageRoute(
-          builder: (context) => PhotoDetailPage(trackingId: trackingId),
-          settings: settings,
-        );
-      }
-
-      // Contoh 2: Terima Tracking object
-      if (settings.arguments is Tracking) {
-        final tracking = settings.arguments as Tracking;
-        return MaterialPageRoute(
-          builder: (context) => PhotoDetailPage(tracking: tracking),
-          settings: settings,
-        );
-      }
-
-      // Default: tanpa arguments
+      // PhotoDetailPage akan extract arguments dari ModalRoute.of(context)
+      // Arguments bisa berupa:
+      // - Tracking object: Navigator.pushNamed(..., arguments: tracking)
+      // - String ID: Navigator.pushNamed(..., arguments: trackingId)
       return MaterialPageRoute(
         builder: (context) => const PhotoDetailPage(),
         settings: settings,
