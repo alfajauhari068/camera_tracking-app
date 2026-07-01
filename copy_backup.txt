@@ -1,4 +1,4 @@
-﻿// Rebuilt from the latest stable full preview to fix broken structure/duplicates.
+// Rebuilt from the latest stable full preview to fix broken structure/duplicates.
 // NOTE: This version focuses on compilation and basic functionality.
 
 import 'dart:async';
@@ -23,7 +23,6 @@ import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import '../../../../core/services/share_service.dart';
 import '../../../../core/utils/app_logger.dart';
 import '../../../../routes.dart';
 
@@ -124,7 +123,6 @@ class CameraTrackingPage extends ConsumerStatefulWidget {
 class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
     with TickerProviderStateMixin {
   final _logger = const AppLogger(tag: 'CameraTrackingPage');
-  final ShareService _shareService = const ShareService();
 
   late final AnimationController _flashPulseController;
   late final AnimationController _lensFlipController;
@@ -134,10 +132,6 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
 
   bool _isRecording = false;
   bool _locationLoading = false;
-
-  // Zoom overlay state
-  bool _zoomOverlayExpanded = false;
-  Timer? _zoomHideTimer;
 
   bool get _isFlashOn => _flashMode == FlashMode.on;
 
@@ -313,6 +307,12 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
             ),
 
             Positioned(top: 72, right: 16, child: _buildStatusBadge(cfg)),
+            Positioned(
+              bottom: 110,
+              left: 0,
+              right: 0,
+              child: Center(child: _buildZoomSelector()),
+            ),
           ],
         );
       },
@@ -487,7 +487,7 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
 
     _controller = controller;
     await controller.initialize();
-
+    
     // Get device zoom range for filtering presets
     try {
       _minZoom = await controller.getMinZoomLevel();
@@ -591,11 +591,11 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
 
       // UI mengikuti nilai aktual yang berhasil diterapkan (jujur, tidak bohong).
       setState(() => _zoomLevel = clamped);
-
+      
       // Sync zoom to camera service for capture
       final cameraSrv = ref.read(cameraServiceProvider);
       await cameraSrv.setZoom(clamped);
-
+      
       _logger.info(
         'Zoom set to ${clamped.toStringAsFixed(2)}x (requested: ${zoom.toStringAsFixed(2)}) '
         '; deviceRange=[${minZoomFallback.toStringAsFixed(2)}..${maxZoomFallback.toStringAsFixed(2)}] '
@@ -855,7 +855,7 @@ class _CameraTrackingPageState extends ConsumerState<CameraTrackingPage>
     final maps = 'https://www.google.com/maps?q=$_latitude,$_longitude';
     final shareText =
         '''
-?? Lokasi Saya
+Ã°Å¸â€œÂ Lokasi Saya
 
 Nama Tempat: ${_meta.locationName}
 Alamat: ${_meta.address}
@@ -979,7 +979,7 @@ Google Maps: $maps
         setState(() => _isRecording = true);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('?? Merekam video...'),
+            content: Text('Ã°Å¸â€Â´ Merekam video...'),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 1),
           ),
@@ -1182,7 +1182,22 @@ Google Maps: $maps
     return '$d/$m/$y $hh:$mm';
   }
 
+  String _buildShareText(CapturedPhoto photo) {
+    return '''
+Ã°Å¸â€œÂ Tracking Photo Details
+
+Nama Tempat: ${photo.locationName ?? 'Unknown'}
+Alamat: ${photo.address ?? 'Unknown'}
+Koordinat: ${photo.latitude?.toStringAsFixed(6) ?? '-'}, ${photo.longitude?.toStringAsFixed(6) ?? '-'}
+Waktu: ${_formatDateTime(photo.timestamp)}
+
+Google Maps: https://www.google.com/maps?q=${photo.latitude ?? 0},${photo.longitude ?? 0}
+''';
+  }
+
   Future<void> _showShareOptions(CapturedPhoto photo) async {
+    final shareText = _buildShareText(photo);
+
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.grey[900],
@@ -1210,36 +1225,15 @@ Google Maps: $maps
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: () async {
-                      final messenger = ScaffoldMessenger.of(context);
                       Navigator.pop(context);
-                      try {
-                        await _shareService.shareLocationText(
-                          locationName: photo.locationName,
-                          address: photo.address,
-                          latitude: photo.latitude,
-                          longitude: photo.longitude,
-                          timestamp: photo.timestamp,
-                        );
-                        if (!mounted) return;
-                        messenger.showSnackBar(
-                          const SnackBar(
-                            content: Text('Teks lokasi dibagikan'),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                      } catch (error) {
-                        if (!mounted) return;
-                        messenger.showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              error is ShareServiceException
-                                  ? error.message
-                                  : 'Gagal membagikan teks lokasi.',
-                            ),
-                            backgroundColor: Colors.orange,
-                          ),
-                        );
-                      }
+                      await Clipboard.setData(ClipboardData(text: shareText));
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Teks lokasi disalin'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
                     },
                     icon: const Icon(Icons.text_snippet),
                     label: const Text('Bagikan Teks & Lokasi'),
@@ -1249,38 +1243,15 @@ Google Maps: $maps
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
-                    onPressed: () async {
-                      final messenger = ScaffoldMessenger.of(context);
+                    onPressed: () {
                       Navigator.pop(context);
-                      try {
-                        await _shareService.sharePhotoWithText(
-                          filePath: photo.filePath,
-                          locationName: photo.locationName,
-                          address: photo.address,
-                          latitude: photo.latitude,
-                          longitude: photo.longitude,
-                          timestamp: photo.timestamp,
-                        );
-                        if (!mounted) return;
-                        messenger.showSnackBar(
-                          const SnackBar(
-                            content: Text('Foto dan teks berhasil dibagikan'),
-                            backgroundColor: Colors.green,
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Bagikan foto: fitur share_plus belum diaktifkan',
                           ),
-                        );
-                      } catch (error) {
-                        if (!mounted) return;
-                        messenger.showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              error is ShareServiceException
-                                  ? error.message
-                                  : 'Gagal membagikan foto.',
-                            ),
-                            backgroundColor: Colors.orange,
-                          ),
-                        );
-                      }
+                        ),
+                      );
                     },
                     icon: const Icon(Icons.image_outlined),
                     label: const Text('Bagikan Foto + Teks'),
@@ -1412,7 +1383,8 @@ Google Maps: $maps
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (context) => _SettingsModalContent(),
+      builder: (context) => _SettingsModalContent(
+      ),
     );
   }
 
@@ -1579,9 +1551,7 @@ Google Maps: $maps
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  for (final z in _zoomPresets.where(
-                                    (z) => z.value >= _minZoom,
-                                  ))
+                                  for (final z in _zoomPresets.where((z) => z.value >= _minZoom))
                                     Padding(
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 4,
@@ -1680,10 +1650,28 @@ Google Maps: $maps
             onCapture: _onCapture,
             onOpenTemplates: _onOpenTemplates,
             lastPhoto: _lastPhoto,
+            zoomLevel: _zoomLevel,
+            onZoomChanged: _applyZoom,
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildZoomSelector() {
+    return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+      _ZoomButton(value: 0.6, isActive: (_zoomLevel - 0.6).abs() < 0.01, onTap: () => _applyZoom(0.6)),
+      _ZoomButton(value: 1.0, isActive: (_zoomLevel - 1.0).abs() < 0.01, onTap: () => _applyZoom(1.0)),
+      _ZoomButton(value: 2.0, isActive: (_zoomLevel - 2.0).abs() < 0.01, onTap: () => _applyZoom(2.0)),
+    ]);
+  }
+
+  Widget _ZoomButton({required double value, required bool isActive, required VoidCallback onTap}) {
+    return GestureDetector(onTap: onTap, child: Container(
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(color: isActive ? Colors.blue.withOpacity(0.3) : Colors.transparent, borderRadius: BorderRadius.circular(16)),
+      child: Text("x" + value.toString(), style: TextStyle(color: isActive ? Colors.blue : Colors.white70, fontWeight: isActive ? FontWeight.bold : FontWeight.normal, fontSize: 14))
+    ));
   }
 
   Widget _buildTopControlBar(BuildContext context) {
@@ -2107,6 +2095,8 @@ class _BottomActionBar extends StatelessWidget {
   final CapturedPhoto? lastPhoto;
   final CameraMode selectedMode;
   final bool isRecording;
+  final double zoomLevel;
+  final Future<void> Function(double) onZoomChanged;
 
   const _BottomActionBar({
     required this.onCapture,
@@ -2114,6 +2104,8 @@ class _BottomActionBar extends StatelessWidget {
     required this.lastPhoto,
     required this.selectedMode,
     required this.isRecording,
+    required this.zoomLevel,
+    required this.onZoomChanged,
   });
 
   @override
@@ -2180,7 +2172,10 @@ class _BottomActionBar extends StatelessWidget {
                 ),
               ),
             ),
+          ],  // closes children
+          ],
           ),
+          ],
           Expanded(
             child: Align(
               alignment: Alignment.centerRight,
@@ -2209,11 +2204,27 @@ class _BottomActionBar extends StatelessWidget {
     );
   }
 
+  Widget _buildZoomSelector() {
+    return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+      _ZoomButton(value: 0.6, isActive: (zoomLevel - 0.6).abs() < 0.01, onTap: () => onZoomChanged(0.6)),
+      _ZoomButton(value: 1.0, isActive: (zoomLevel - 1.0).abs() < 0.01, onTap: () => onZoomChanged(1.0)),
+      _ZoomButton(value: 2.0, isActive: (zoomLevel - 2.0).abs() < 0.01, onTap: () => onZoomChanged(2.0)),
+    ]);
+  }
+
+  Widget _ZoomButton({required double value, required bool isActive, required VoidCallback onTap}) {
+    return GestureDetector(onTap: onTap, child: Container(
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(color: isActive ? Colors.blue.withOpacity(0.3) : Colors.transparent, borderRadius: BorderRadius.circular(16)),
+      child: Text("x" + value.toString(), style: TextStyle(color: isActive ? Colors.blue : Colors.white70, fontWeight: isActive ? FontWeight.bold : FontWeight.normal, fontSize: 14))
+    ));
+  }
+
   /// Build thumbnail widget untuk history page.
   ///
   /// Behavior:
-  /// - Jika lastPhoto ada ? tampilkan thumbnail gambar
-  /// - Jika lastPhoto null ? tampilkan placeholder icon + teks
+  /// - Jika lastPhoto ada Ã¢â€ â€™ tampilkan thumbnail gambar
+  /// - Jika lastPhoto null Ã¢â€ â€™ tampilkan placeholder icon + teks
   ///
   /// Perilaku tap SELALU sama: buka HistoryPage tanpa guard
   /// HistoryPage sendiri menangani empty state jika tidak ada data
@@ -2400,7 +2411,7 @@ class _SettingsModalContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // ? ref.watch() sekarang akan trigger rebuild saat state berubah
+    // Ã¢Å“â€¦ ref.watch() sekarang akan trigger rebuild saat state berubah
     final cfg = ref.watch(cameraConfigProvider);
     final notifier = ref.read(cameraConfigProvider.notifier);
     final primary = Theme.of(context).colorScheme.primary;
@@ -2472,7 +2483,7 @@ class _SettingsModalContent extends ConsumerWidget {
               value: cfg.activeTheme.isNotEmpty,
               activeThumbColor: primary,
               onChanged: (value) {
-                // ? Fixed: Use toggleWatermark() for proper ON/OFF logic
+                // Ã¢Å“â€¦ Fixed: Use toggleWatermark() for proper ON/OFF logic
                 notifier.toggleWatermark();
               },
             ),
@@ -2511,6 +2522,7 @@ class _SettingsModalContent extends ConsumerWidget {
               value: cfg.flashMode == CameraFlashMode.on,
               activeThumbColor: primary,
               onChanged: (value) {
+                final nextMode = value ? FlashMode.on : FlashMode.off;
                 notifier.cycleFlashMode();
               },
             ),
@@ -2593,3 +2605,15 @@ class GridPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+
+
+
+
+
+
+
+
+
+
+
+
